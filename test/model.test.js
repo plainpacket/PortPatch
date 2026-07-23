@@ -18,6 +18,20 @@ test('a new configuration has a local node and safe defaults', () => {
   assert.deepEqual(config.servers, []);
 });
 
+test('legacy per-route automatic startup is removed during normalization', () => {
+  const config = normalizeConfig({
+    routes: [{
+      id: 'legacy-auto-start',
+      name: 'Legacy route',
+      protocol: 'tcp',
+      source: { nodeId: 'local', bindHost: '127.0.0.1', port: 18000 },
+      target: { nodeId: 'local', host: '127.0.0.1', port: 8000 },
+      autoStart: true,
+    }],
+  });
+  assert.equal(Object.hasOwn(config.routes[0], 'autoStart'), false);
+});
+
 test('a remote node rejects duplicate ports even with different bind addresses', () => {
   const config = createDefaultConfig();
   config.servers = [{ id: 'remote', name: 'Remote', host: 'remote', port: 22, username: 'dev', authMode: 'agent' }];

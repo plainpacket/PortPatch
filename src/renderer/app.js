@@ -689,7 +689,6 @@ function renderInspector() {
     </div>
     ${status.lastError ? `<div class="error-card">${escapeHtml(status.lastError)}${status.retryInMs ? `<br>Retrying in ${Math.ceil(status.retryInMs / 1000)} seconds.` : ''}</div>` : ''}
     <div class="route-options">
-      <span class="option-chip">${route.autoStart ? 'Start with application' : 'Manual start'}</span>
       <span class="option-chip">${route.reconnect ? 'Automatic reconnection' : 'No reconnection'}</span>
       <span class="option-chip">${escapeHtml(route.source.bindHost)}</span>
     </div>
@@ -1017,7 +1016,6 @@ function routeEditorTemplate(route, isNew) {
           <label>Route name<input id="edge-route-name" value="${escapeHtml(route.name)}"></label>
           <label>Bind address<input id="edge-source-bind" value="${escapeHtml(route.source.bindHost)}"></label>
           <label id="edge-target-host-field">Target address<input id="edge-target-host" value="${escapeHtml(route.target.host)}"></label>
-          <label class="edge-check"><input id="edge-route-autostart" type="checkbox" ${route.autoStart ? 'checked' : ''}> Start with PortPatch</label>
           <label class="edge-check"><input id="edge-route-reconnect" type="checkbox" ${route.reconnect ? 'checked' : ''}> Reconnect automatically</label>
           <div id="edge-exposure-warning" class="edge-exposure-warning ${exposed ? '' : 'is-hidden'}">
             A remote or non-loopback listener may be exposed by the SSH server's GatewayPorts policy.
@@ -1089,7 +1087,6 @@ function createRouteEdge(sourceNodeId, targetNodeId) {
     protocol: 'tcp',
     source: { nodeId: sourceNodeId, bindHost: '127.0.0.1', port: '' },
     target: { nodeId: targetNodeId, host: '127.0.0.1', port: '' },
-    autoStart: false,
     reconnect: true,
     allowExternal: false,
   };
@@ -1131,7 +1128,6 @@ async function saveRouteEditor(event) {
     protocol,
     source: { ...route.source, bindHost, port: sourcePort },
     target: { ...route.target, host: targetHost, port: targetPort },
-    autoStart: $('#edge-route-autostart').checked,
     reconnect: $('#edge-route-reconnect').checked,
     allowExternal: exposed && $('#edge-route-allow-external').checked,
   };
@@ -1191,15 +1187,17 @@ async function deleteRoute(routeId) {
 function settingsTemplate() {
   const settings = state.config.settings;
   return `
-    <div class="modal-header"><div><h2 id="modal-title">Application settings</h2><p>Configure tray behavior and the local node name.</p></div><button class="icon-button small" data-close-modal type="button">x</button></div>
+    <div class="modal-header"><div><h2 id="modal-title">Application settings</h2><p>Configure Windows startup, tray behavior, and the local node name.</p></div><button class="icon-button small" data-close-modal type="button">x</button></div>
     <div class="modal-body">
       <form class="form-grid">
         <div class="form-field full"><label for="local-name">Local computer node name</label><input id="local-name" value="${escapeHtml(state.config.localNode.name)}"></div>
         <div class="form-divider"></div>
         <div class="checkbox-field full"><input id="close-to-tray" type="checkbox" ${settings.closeToTray ? 'checked' : ''}><label for="close-to-tray">Hide in the system tray instead of quitting when the window closes</label></div>
-        <div class="checkbox-field full"><input id="start-with-system" type="checkbox" ${settings.startWithSystem ? 'checked' : ''} ${state.platform === 'linux' ? 'disabled' : ''}><label for="start-with-system">Launch at Windows sign-in</label></div>
+        <div class="section-label">WINDOWS STARTUP</div>
+        <div class="checkbox-field full"><input id="start-with-system" type="checkbox" ${settings.startWithSystem ? 'checked' : ''} ${state.platform === 'linux' ? 'disabled' : ''}><label for="start-with-system">Launch PortPatch when I sign in to Windows</label></div>
         ${state.platform === 'linux' ? '<div class="notice">Linux autostart integration is planned for a later release.</div>' : ''}
-        <div class="checkbox-field full"><input id="launch-hidden" type="checkbox" ${settings.launchHidden ? 'checked' : ''}><label for="launch-hidden">Start in the tray without opening the window when launched automatically</label></div>
+        <div class="checkbox-field full"><input id="launch-hidden" type="checkbox" ${settings.launchHidden ? 'checked' : ''} ${settings.startWithSystem ? '' : 'disabled'}><label for="launch-hidden">Open in the tray when launched at sign-in</label></div>
+        <span class="form-help full">Port routes remain stopped until you select Start route or Start all.</span>
         ${state.encryption?.warning ? `<div class="notice">${escapeHtml(state.encryption.warning)}</div>` : ''}
       </form>
     </div>
@@ -1208,6 +1206,13 @@ function settingsTemplate() {
 
 function openSettingsModal() {
   openModal(settingsTemplate());
+  const updateWindowsStartupFields = () => {
+    const enabled = $('#start-with-system').checked && state.platform !== 'linux';
+    $('#launch-hidden').disabled = !enabled;
+    if (!enabled) $('#launch-hidden').checked = false;
+  };
+  $('#start-with-system').addEventListener('change', updateWindowsStartupFields);
+  updateWindowsStartupFields();
   $('#save-settings').addEventListener('click', async () => {
     const name = $('#local-name').value.trim();
     if (!name) return toast('Enter a name for the local computer node.', 'error');

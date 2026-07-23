@@ -73,7 +73,6 @@ The executable is portable, but mutable user data is stored in Electron's per-us
       "protocol": "tcp",
       "source": { "nodeId": "local", "bindHost": "127.0.0.1", "port": 18000 },
       "target": { "nodeId": "gpu-server", "host": "127.0.0.1", "port": 8000 },
-      "autoStart": true,
       "reconnect": true,
       "allowExternal": false
     }

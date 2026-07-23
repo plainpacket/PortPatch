@@ -19,8 +19,7 @@ class ConfigStore {
       const parsed = JSON.parse(text);
       const { config, errors } = validateConfig(parsed);
       if (errors.length) {
-        this.logger('warn', 'Automatic startup was disabled because part of the configuration is invalid.', { errors });
-        for (const route of config.routes) route.autoStart = false;
+        this.logger('warn', 'The configuration contains invalid routes; they will remain stopped.', { errors });
       }
       this.config = config;
     } catch (error) {

@@ -403,11 +403,6 @@ class RelayEngine {
     }
   }
 
-  async startAutoRoutes() {
-    const routes = this.getConfig().routes.filter((route) => route.autoStart);
-    await Promise.allSettled(routes.map((route) => this.start(route.id)));
-  }
-
   async startAll() {
     await Promise.allSettled(this.getConfig().routes.map((route) => this.start(route.id)));
     return this.statuses();

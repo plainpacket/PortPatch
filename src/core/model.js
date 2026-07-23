@@ -165,7 +165,6 @@ function normalizeRoute(route) {
       host: cleanText(route?.target?.host) || '127.0.0.1',
       port: Number(route?.target?.port || 0),
     },
-    autoStart: Boolean(route?.autoStart),
     reconnect: route?.reconnect !== false,
     allowExternal: Boolean(route?.allowExternal),
   };

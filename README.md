@@ -18,7 +18,7 @@ Current version: `0.1.0` - Windows MVP - MIT License
   - Listen on server A and use server B as the egress
 - Private key, password, SSH Agent, and Pageant authentication
 - SHA-256 SSH host-key verification and pinning
-- Per-route start and stop controls, automatic startup, and exponential-backoff reconnection
+- Per-route start and stop controls with exponential-backoff reconnection
 - Active connection counts, byte counters, errors, and retry status
 - Password and key-passphrase protection through Electron `safeStorage` and Windows DPAPI
 - Close to tray, start all, stop all, and quit controls

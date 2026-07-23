@@ -16,9 +16,9 @@ const demoConfig = {
     { id: 'lab', name: 'Offline Research Server', host: '172.16.20.8', port: 2222, username: 'research', authMode: 'agent', keyPath: '', hostFingerprint: 'demo', position: { x: 900, y: 260 } },
   ],
   routes: [
-    { id: 'llm', name: 'GPU LLM API', protocol: 'tcp', source: { nodeId: 'local', bindHost: '127.0.0.1', port: 18000 }, target: { nodeId: 'gpu', host: '127.0.0.1', port: 8000 }, autoStart: true, reconnect: true },
-    { id: 'intranet', name: 'Private Site Proxy', protocol: 'socks5', source: { nodeId: 'local', bindHost: '127.0.0.1', port: 1080 }, target: { nodeId: 'private', host: '127.0.0.1', port: 0 }, autoStart: false, reconnect: true },
-    { id: 'internet', name: 'Research Server Internet Egress', protocol: 'socks5', source: { nodeId: 'lab', bindHost: '127.0.0.1', port: 1080 }, target: { nodeId: 'local', host: '127.0.0.1', port: 0 }, autoStart: true, reconnect: true },
+    { id: 'llm', name: 'GPU LLM API', protocol: 'tcp', source: { nodeId: 'local', bindHost: '127.0.0.1', port: 18000 }, target: { nodeId: 'gpu', host: '127.0.0.1', port: 8000 }, reconnect: true },
+    { id: 'intranet', name: 'Private Site Proxy', protocol: 'socks5', source: { nodeId: 'local', bindHost: '127.0.0.1', port: 1080 }, target: { nodeId: 'private', host: '127.0.0.1', port: 0 }, reconnect: true },
+    { id: 'internet', name: 'Research Server Internet Egress', protocol: 'socks5', source: { nodeId: 'lab', bindHost: '127.0.0.1', port: 1080 }, target: { nodeId: 'local', host: '127.0.0.1', port: 0 }, reconnect: true },
   ],
 };
 
@@ -281,6 +281,7 @@ async function run() {
       modalHidden: document.querySelector('#modal-backdrop').classList.contains('is-hidden'),
       sourcePort: Boolean(document.querySelector('#edge-source-port')),
       targetPort: Boolean(document.querySelector('#edge-target-port')),
+      autoStartControl: Boolean(document.querySelector('#edge-route-autostart')),
       nodeContext: document.querySelector('.edge-editor-context')?.textContent.replace(/\\s+/g, ' ').trim(),
       edges: document.querySelectorAll('.edge-group').length,
       width: rect?.width,
@@ -299,6 +300,7 @@ async function run() {
     };
   })()`);
   if (!routeEditor.visible || !routeEditor.modalHidden || !routeEditor.sourcePort || !routeEditor.targetPort
+    || routeEditor.autoStartControl
     || !routeEditor.nodeContext.includes('Development Laptop')
     || !routeEditor.nodeContext.includes('GPU Server')
     || routeEditor.edges !== 4
@@ -386,6 +388,29 @@ async function run() {
     throw new Error(`Help modal validation failed: ${JSON.stringify(helpModal)}`);
   }
   await capture(window, '05-help-modal.png');
+
+  await executeChecked(window, 'open application settings', `(() => {
+    document.querySelector('[data-close-modal]').click();
+    document.querySelector('#settings-button').click();
+    return true;
+  })()`);
+  const startupSettings = await window.webContents.executeJavaScript(`({
+    title: document.querySelector('#modal-title')?.textContent,
+    windowsStartupControls: document.querySelectorAll('#start-with-system').length,
+    windowsStartupLabel: document.querySelector('label[for="start-with-system"]')?.textContent,
+    routeStartupControls: document.querySelectorAll('#edge-route-autostart').length,
+    routeBehaviorNote: document.querySelector('#modal')?.textContent.includes('Port routes remain stopped until you select Start route or Start all.'),
+    hiddenLaunchDisabled: document.querySelector('#launch-hidden')?.disabled
+  })`);
+  if (startupSettings.title !== 'Application settings'
+    || startupSettings.windowsStartupControls !== 1
+    || startupSettings.windowsStartupLabel !== 'Launch PortPatch when I sign in to Windows'
+    || startupSettings.routeStartupControls !== 0
+    || !startupSettings.routeBehaviorNote
+    || !startupSettings.hiddenLaunchDisabled) {
+    throw new Error(`Windows startup settings validation failed: ${JSON.stringify(startupSettings)}`);
+  }
+  await capture(window, '06-settings-modal.png');
 
   if (errors.length) throw new Error(`Renderer console errors: ${errors.join(' | ')}`);
   window.destroy();

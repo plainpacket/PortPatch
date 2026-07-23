@@ -243,6 +243,7 @@ button { color: inherit; }
 .form-field input::placeholder { color: #4f5d72; }
 .input-with-button { display: grid; grid-template-columns: 1fr auto; gap: 7px; }
 .form-help { color: var(--muted-2); font-size: 8px; line-height: 1.5; }
+.form-help.full { grid-column: 1 / -1; }
 .detected-key-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; margin-top: 1px; }
 .detected-key-row > span { color: var(--teal); font-size: 8px; font-weight: 700; }
 .detected-key-row select { height: 30px; min-width: 0; border: 1px solid #33415c; border-radius: 7px; outline: 0; background: #0a1120; color: #cbd5e1; padding: 0 8px; font-size: 9px; }

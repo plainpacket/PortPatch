@@ -413,7 +413,6 @@ async function initialize() {
   createTray();
   createWindow();
   registerIpc();
-  setTimeout(() => relayEngine.startAutoRoutes(), 300);
 }
 
 if (gotLock) {
