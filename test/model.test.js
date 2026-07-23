@@ -15,7 +15,13 @@ test('a new configuration has a local node and safe defaults', () => {
   const config = createDefaultConfig();
   assert.equal(config.localNode.id, 'local');
   assert.equal(config.settings.closeToTray, true);
+  assert.equal(config.settings.uiScale, 100);
   assert.deepEqual(config.servers, []);
+});
+
+test('interface scale accepts supported sizes and rejects arbitrary zoom values', () => {
+  assert.equal(normalizeConfig({ settings: { uiScale: 90 } }).settings.uiScale, 90);
+  assert.equal(normalizeConfig({ settings: { uiScale: 93 } }).settings.uiScale, 100);
 });
 
 test('legacy per-route automatic startup is removed during normalization', () => {

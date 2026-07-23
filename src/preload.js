@@ -1,6 +1,6 @@
 'use strict';
 
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webFrame } = require('electron');
 
 async function invoke(channel, payload) {
   const response = await ipcRenderer.invoke(channel, payload);
@@ -21,6 +21,8 @@ function subscribe(channel, callback) {
 
 contextBridge.exposeInMainWorld('sshRouter', Object.freeze({
   getState: () => invoke('state:get'),
+  getUiScale: () => Math.round(webFrame.getZoomFactor() * 100),
+  setUiScale: (scale) => webFrame.setZoomFactor(Number(scale) / 100),
   saveConfig: (payload) => invoke('config:save', payload),
   selectKeyFile: () => invoke('dialog:select-key'),
   listPrivateKeys: () => invoke('ssh-keys:list'),

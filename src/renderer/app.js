@@ -739,19 +739,20 @@ function serverFormTemplate(server, existing, metadata) {
         <div class="form-field"><label for="server-port">SSH port</label><input id="server-port" type="number" min="1" max="65535" value="${server.port || 22}" required></div>
         <div class="form-field"><label for="server-username">Username</label><input id="server-username" value="${escapeHtml(server.username)}" placeholder="ubuntu" required></div>
         <div class="form-field"><label for="server-auth">Authentication</label><select id="server-auth"><option value="key" ${server.authMode === 'key' ? 'selected' : ''}>Private key</option><option value="password" ${server.authMode === 'password' ? 'selected' : ''}>Password</option><option value="agent" ${server.authMode === 'agent' ? 'selected' : ''}>SSH Agent</option></select></div>
-        <div id="key-fields" class="form-field full">
-          <label for="server-key-path">Private key file</label>
-          <div class="input-with-button"><input id="server-key-path" value="${escapeHtml(server.keyPath)}" placeholder="~/.ssh/id_ed25519"><button id="browse-key" class="button button-ghost" type="button">Browse</button></div>
-          <div id="detected-key-row" class="detected-key-row is-hidden">
-            <span>Detected in ~/.ssh</span>
-            <select id="detected-key-select" aria-label="Detected private keys"></select>
+        <details id="key-options" class="form-details full">
+          <summary>Private key options <span id="key-options-summary">${server.keyPath ? 'Custom key configured' : 'Detecting a key in ~/.ssh...'}</span></summary>
+          <div class="form-details-body">
+            <div id="key-fields" class="form-field full">
+              <label for="server-key-path">Private key file</label>
+              <div class="input-with-button"><input id="server-key-path" value="${escapeHtml(server.keyPath)}" placeholder="~/.ssh/id_ed25519"><button id="browse-key" class="button button-ghost" type="button">Browse</button></div>
+              <span id="key-detection-status" class="form-help">Looking for a private key in ~/.ssh...</span>
+            </div>
+            <div id="passphrase-field" class="form-field full"><label for="server-passphrase">Key passphrase ${metadata.hasPassphrase ? '- saved' : '- optional'}</label><input id="server-passphrase" type="password" autocomplete="new-password" placeholder="${metadata.hasPassphrase ? 'Enter a new value to change it' : 'Required only for encrypted keys'}"></div>
+            <div id="clear-passphrase-field" class="checkbox-field full ${metadata.hasPassphrase ? '' : 'is-hidden'}"><input id="clear-passphrase" type="checkbox"><label for="clear-passphrase">Remove the saved passphrase; the new private key has no passphrase</label></div>
           </div>
-          <span id="key-detection-status" class="form-help">Looking for private keys in ~/.ssh...</span>
-        </div>
-        <div id="passphrase-field" class="form-field full"><label for="server-passphrase">Key passphrase ${metadata.hasPassphrase ? '- saved' : '- optional'}</label><input id="server-passphrase" type="password" autocomplete="new-password" placeholder="${metadata.hasPassphrase ? 'Enter a new value to change it' : 'Required only for encrypted keys'}"></div>
-        <div id="clear-passphrase-field" class="checkbox-field full ${metadata.hasPassphrase ? '' : 'is-hidden'}"><input id="clear-passphrase" type="checkbox"><label for="clear-passphrase">Remove the saved passphrase; the new private key has no passphrase</label></div>
+        </details>
         <div id="password-field" class="form-field full"><label for="server-password">SSH password ${metadata.hasPassword ? '- saved' : ''}</label><input id="server-password" type="password" autocomplete="new-password" placeholder="${metadata.hasPassword ? 'Enter a new value to change it' : 'Enter password'}"></div>
-        <div id="agent-notice" class="notice info">Uses keys from a running OpenSSH Agent or Pageant. No secret is stored in PortPatch.</div>
+        <div id="agent-notice" class="notice info">Uses a key already unlocked in Windows OpenSSH Agent or Pageant. PortPatch does not read a private key file or store a passphrase in this mode.</div>
         <div class="form-divider"></div>
         <div class="form-field full"><label for="server-fingerprint">Trusted host-key fingerprint - SHA-256</label><input id="server-fingerprint" value="${escapeHtml(server.hostFingerprint)}" readonly placeholder="Shown after a connection test"><span class="form-help">Verify it again if the server address or key changes.</span></div>
         <div id="test-result" class="is-hidden"></div>
@@ -808,8 +809,7 @@ function openServerModal(serverId = null) {
 
   const updateAuthFields = () => {
     const mode = $('#server-auth').value;
-    $('#key-fields').classList.toggle('is-hidden', mode !== 'key');
-    $('#passphrase-field').classList.toggle('is-hidden', mode !== 'key');
+    $('#key-options').classList.toggle('is-hidden', mode !== 'key');
     $('#clear-passphrase-field').classList.toggle('is-hidden', mode !== 'key' || !metadata.hasPassphrase);
     $('#password-field').classList.toggle('is-hidden', mode !== 'password');
     $('#agent-notice').classList.toggle('is-hidden', mode !== 'agent');
@@ -831,29 +831,31 @@ function openServerModal(serverId = null) {
   $('#server-port').addEventListener('input', clearFingerprintIfEndpointChanged);
   $('#browse-key').addEventListener('click', async () => {
     const file = await api.selectKeyFile();
-    if (file) $('#server-key-path').value = file;
+    if (file) {
+      $('#server-key-path').value = file;
+      $('#key-options-summary').textContent = 'Custom key selected';
+    }
   });
   const loadDetectedKeys = async () => {
     const status = $('#key-detection-status');
-    const row = $('#detected-key-row');
-    const select = $('#detected-key-select');
+    const summary = $('#key-options-summary');
     const keyPath = $('#server-key-path');
     try {
       const keys = await api.listPrivateKeys();
-      if (!$('#server-form') || !status || !row || !select || !keyPath) return;
+      if (!$('#server-form') || !status || !summary || !keyPath) return;
       if (!keys.length) {
-        status.textContent = 'No private keys were detected. Select a file manually.';
+        status.textContent = 'No private key was detected. Select a file manually.';
+        summary.textContent = 'No key detected';
+        if (!keyPath.value) $('#key-options').open = true;
         return;
       }
-      select.innerHTML = keys.map((key) => `<option value="${escapeHtml(key.path)}">${escapeHtml(key.name)}${key.preferred ? ' - OpenSSH default' : ''}</option>`).join('');
-      const matchingIndex = keys.findIndex((key) => key.path === keyPath.value);
-      if (matchingIndex >= 0) select.selectedIndex = matchingIndex;
-      else if (!keyPath.value) keyPath.value = keys[0].path;
-      row.classList.remove('is-hidden');
-      status.textContent = `${keys.length} private key${keys.length === 1 ? '' : 's'} detected. Key contents never leave this computer.`;
-      select.addEventListener('change', () => {
-        keyPath.value = select.value;
-      });
+      const detected = keys.find((key) => key.path === keyPath.value) || keys[0];
+      if (!keyPath.value) keyPath.value = detected.path;
+      const usingDetectedKey = keyPath.value === detected.path;
+      summary.textContent = usingDetectedKey ? `${detected.name} detected automatically` : 'Custom key configured';
+      status.textContent = usingDetectedKey
+        ? `Using ${detected.name} from ~/.ssh. Browse only if this server uses another key.`
+        : 'Using the configured private key file.';
     } catch (error) {
       if (status) status.textContent = `Could not scan ~/.ssh: ${error.message}`;
     }
@@ -870,7 +872,10 @@ function openServerModal(serverId = null) {
       clearPassphrase: $('#clear-passphrase').checked,
     };
     const validation = validateServerDraft(draft, credentialDraft);
-    if (validation) return toast(validation, 'error');
+    if (validation) {
+      if (draft.authMode === 'key' && !draft.keyPath) $('#key-options').open = true;
+      return toast(validation, 'error');
+    }
     button.disabled = true;
     button.textContent = 'Connecting...';
     resultBox.className = 'test-result';
@@ -1186,11 +1191,19 @@ async function deleteRoute(routeId) {
 
 function settingsTemplate() {
   const settings = state.config.settings;
+  const uiScale = Number(settings.uiScale || 100);
   return `
     <div class="modal-header"><div><h2 id="modal-title">Application settings</h2><p>Configure Windows startup, tray behavior, and the local node name.</p></div><button class="icon-button small" data-close-modal type="button">x</button></div>
     <div class="modal-body">
       <form class="form-grid">
         <div class="form-field full"><label for="local-name">Local computer node name</label><input id="local-name" value="${escapeHtml(state.config.localNode.name)}"></div>
+        <div class="form-field full"><label for="ui-scale">Interface size</label><select id="ui-scale">
+          <option value="80" ${uiScale === 80 ? 'selected' : ''}>80% - Small</option>
+          <option value="90" ${uiScale === 90 ? 'selected' : ''}>90% - Compact</option>
+          <option value="100" ${uiScale === 100 ? 'selected' : ''}>100% - Default</option>
+          <option value="110" ${uiScale === 110 ? 'selected' : ''}>110% - Large</option>
+          <option value="125" ${uiScale === 125 ? 'selected' : ''}>125% - Extra large</option>
+        </select><span class="form-help">Applied to the entire PortPatch interface and saved for the next launch.</span></div>
         <div class="form-divider"></div>
         <div class="checkbox-field full"><input id="close-to-tray" type="checkbox" ${settings.closeToTray ? 'checked' : ''}><label for="close-to-tray">Hide in the system tray instead of quitting when the window closes</label></div>
         <div class="section-label">WINDOWS STARTUP</div>
@@ -1221,8 +1234,10 @@ function openSettingsModal() {
       closeToTray: $('#close-to-tray').checked,
       startWithSystem: $('#start-with-system').checked,
       launchHidden: $('#launch-hidden').checked,
+      uiScale: Number($('#ui-scale').value),
     };
     closeModal();
+    api.setUiScale(state.config.settings.uiScale);
     renderAll();
     try {
       await persistConfig();
@@ -1355,6 +1370,7 @@ async function initialize() {
   try {
     const initial = await api.getState();
     Object.assign(state, initial);
+    api.setUiScale(initial.config.settings.uiScale || 100);
     document.documentElement.classList.add(`platform-${state.platform}`);
     state.logs = initial.logs || [];
     for (const status of pendingStatuses) state.statuses[status.routeId] = status;

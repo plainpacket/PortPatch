@@ -8,7 +8,7 @@ const outputDirectory = path.resolve(process.argv[2] || path.join(process.cwd(),
 
 const demoConfig = {
   version: 1,
-  settings: { closeToTray: true, startWithSystem: false, launchHidden: false },
+  settings: { closeToTray: true, startWithSystem: false, launchHidden: false, uiScale: 100 },
   localNode: { id: 'local', name: 'Development Laptop', position: { x: 100, y: 260 } },
   servers: [
     { id: 'gpu', name: 'GPU Server', host: '10.10.0.21', port: 22, username: 'ubuntu', authMode: 'agent', keyPath: '', hostFingerprint: 'demo', position: { x: 500, y: 120 } },
@@ -360,14 +360,16 @@ async function run() {
   await new Promise((resolve) => setTimeout(resolve, 200));
   const keyDetection = await window.webContents.executeJavaScript(`({
     selectedPath: document.querySelector('#server-key-path')?.value,
-    detectedOptions: document.querySelectorAll('#detected-key-select option').length,
-    detectionVisible: !document.querySelector('#detected-key-row')?.classList.contains('is-hidden'),
+    selectionControls: document.querySelectorAll('#detected-key-select').length,
+    optionsClosed: !document.querySelector('#key-options')?.open,
+    summary: document.querySelector('#key-options-summary')?.textContent,
     status: document.querySelector('#key-detection-status')?.textContent
   })`);
   if (keyDetection.selectedPath !== 'C:\\Users\\demo\\.ssh\\id_ed25519'
-    || keyDetection.detectedOptions !== 2
-    || !keyDetection.detectionVisible
-    || !keyDetection.status.includes('2 private keys detected')) {
+    || keyDetection.selectionControls !== 0
+    || !keyDetection.optionsClosed
+    || keyDetection.summary !== 'id_ed25519 detected automatically'
+    || !keyDetection.status.includes('Using id_ed25519 from ~/.ssh')) {
     throw new Error(`Private key detection validation failed: ${JSON.stringify(keyDetection)}`);
   }
   await capture(window, '04-server-modal.png');
@@ -400,17 +402,27 @@ async function run() {
     windowsStartupLabel: document.querySelector('label[for="start-with-system"]')?.textContent,
     routeStartupControls: document.querySelectorAll('#edge-route-autostart').length,
     routeBehaviorNote: document.querySelector('#modal')?.textContent.includes('Port routes remain stopped until you select Start route or Start all.'),
-    hiddenLaunchDisabled: document.querySelector('#launch-hidden')?.disabled
+    hiddenLaunchDisabled: document.querySelector('#launch-hidden')?.disabled,
+    interfaceSize: document.querySelector('#ui-scale')?.value
   })`);
   if (startupSettings.title !== 'Application settings'
     || startupSettings.windowsStartupControls !== 1
     || startupSettings.windowsStartupLabel !== 'Launch PortPatch when I sign in to Windows'
     || startupSettings.routeStartupControls !== 0
     || !startupSettings.routeBehaviorNote
-    || !startupSettings.hiddenLaunchDisabled) {
+    || !startupSettings.hiddenLaunchDisabled
+    || startupSettings.interfaceSize !== '100') {
     throw new Error(`Windows startup settings validation failed: ${JSON.stringify(startupSettings)}`);
   }
   await capture(window, '06-settings-modal.png');
+  await executeChecked(window, 'save a compact interface size', `(() => {
+    document.querySelector('#ui-scale').value = '90';
+    document.querySelector('#save-settings').click();
+    return true;
+  })()`);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const appliedScale = await window.webContents.executeJavaScript(`window.sshRouter.getUiScale()`);
+  if (appliedScale !== 90) throw new Error(`Interface scale was not applied: ${appliedScale}`);
 
   if (errors.length) throw new Error(`Renderer console errors: ${errors.join(' | ')}`);
   window.destroy();

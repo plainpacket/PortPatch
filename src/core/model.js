@@ -5,6 +5,7 @@ const net = require('node:net');
 const LOCAL_NODE_ID = 'local';
 const ROUTE_PROTOCOLS = new Set(['tcp', 'socks5']);
 const AUTH_MODES = new Set(['key', 'password', 'agent']);
+const UI_SCALES = new Set([80, 90, 100, 110, 125]);
 
 function createDefaultConfig() {
   return {
@@ -13,6 +14,7 @@ function createDefaultConfig() {
       closeToTray: true,
       startWithSystem: false,
       launchHidden: false,
+      uiScale: 100,
     },
     localNode: {
       id: LOCAL_NODE_ID,
@@ -117,6 +119,7 @@ function normalizeConfig(input) {
       closeToTray: settings.closeToTray !== false,
       startWithSystem: Boolean(settings.startWithSystem),
       launchHidden: Boolean(settings.launchHidden),
+      uiScale: UI_SCALES.has(Number(settings.uiScale)) ? Number(settings.uiScale) : 100,
     },
     localNode: {
       id: LOCAL_NODE_ID,

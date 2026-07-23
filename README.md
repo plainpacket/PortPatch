@@ -17,6 +17,7 @@ Current version: `0.1.0` - Windows MVP - MIT License
   - Listen on a remote server and use your computer as the egress
   - Listen on server A and use server B as the egress
 - Private key, password, SSH Agent, and Pageant authentication
+- Persistent interface sizing from 80% to 125%
 - SHA-256 SSH host-key verification and pinning
 - Per-route start and stop controls with exponential-backoff reconnection
 - Active connection counts, byte counters, errors, and retry status
@@ -63,7 +64,7 @@ For a browser, configure `127.0.0.1:1080` as its SOCKS5 proxy and enable proxy-b
 ## Quick start
 
 1. Download the portable Windows executable from [GitHub Releases](https://github.com/plainpacket/PortPatch/releases) and run it.
-2. Select `Add server`, then enter the SSH address, user, and authentication method. For private-key authentication, PortPatch detects recognized keys in `~/.ssh` and lets you choose a different file when needed.
+2. Select `Add server`, then enter the SSH address, user, and authentication method. For private-key authentication, PortPatch silently selects a recognized key from `~/.ssh`; open `Private key options` only when you need another file or a passphrase. SSH Agent mode uses keys already unlocked in Windows OpenSSH Agent or Pageant.
 3. Select `Test connection`, verify the SHA-256 host-key fingerprint, and trust it only if it is correct. PortPatch does not send a password or private key before this confirmation.
 4. Hold `Ctrl` and drag the node that should accept connections onto the node that should receive the traffic. Drag without `Ctrl` to rearrange nodes, drag the background to pan, and use the mouse wheel to zoom.
 5. Enter the two ports in the compact editor on the new edge. Open `Advanced` only when you need to change addresses, route type, startup, or reconnection behavior.

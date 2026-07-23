@@ -244,10 +244,10 @@ button { color: inherit; }
 .input-with-button { display: grid; grid-template-columns: 1fr auto; gap: 7px; }
 .form-help { color: var(--muted-2); font-size: 8px; line-height: 1.5; }
 .form-help.full { grid-column: 1 / -1; }
-.detected-key-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; margin-top: 1px; }
-.detected-key-row > span { color: var(--teal); font-size: 8px; font-weight: 700; }
-.detected-key-row select { height: 30px; min-width: 0; border: 1px solid #33415c; border-radius: 7px; outline: 0; background: #0a1120; color: #cbd5e1; padding: 0 8px; font-size: 9px; }
-.detected-key-row select:focus { border-color: var(--purple); }
+.form-details { grid-column: 1 / -1; border: 1px solid var(--line); border-radius: 9px; background: rgba(10, 17, 32, 0.55); }
+.form-details summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 11px; color: #cbd5e1; cursor: pointer; font-size: 9px; font-weight: 700; user-select: none; }
+.form-details summary span { color: var(--muted-2); font-size: 8px; font-weight: 500; }
+.form-details-body { display: grid; gap: 12px; padding: 3px 11px 12px; border-top: 1px solid var(--line-soft); }
 .form-divider { grid-column: 1 / -1; height: 1px; background: var(--line); margin: 2px 0; }
 .section-label { grid-column: 1 / -1; margin: 2px 0 -4px; color: var(--purple); font-size: 9px; font-weight: 750; letter-spacing: 0.07em; }
 .checkbox-field { display: flex; align-items: center; gap: 8px; min-height: 31px; }
