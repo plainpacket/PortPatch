@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>PortPatch</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app" class="app-shell is-loading">
+    <header class="topbar">
+      <div class="brand">
+        <img src="../../assets/icon.svg" alt="" class="brand-icon">
+        <div>
+          <strong>PortPatch</strong>
+          <span>Connect ports visually</span>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <span id="security-badge" class="security-badge" title="Credential storage status">Checking secure storage</span>
+        <button id="start-all-button" class="button button-ghost" type="button">Start all</button>
+        <button id="stop-all-button" class="button button-ghost" type="button">Stop all</button>
+        <button id="add-server-button" class="button button-primary" type="button"><span>+</span> Add server</button>
+        <button id="settings-button" class="icon-button" type="button" aria-label="Settings" title="Settings">&#9881;</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="sidebar">
+        <section class="sidebar-section nodes-section">
+          <div class="section-heading">
+            <div>
+              <span class="eyebrow">NODES</span>
+              <h2>Computers and servers</h2>
+            </div>
+            <button id="sidebar-add-server" class="tiny-button" type="button" aria-label="Add server">+</button>
+          </div>
+          <div id="node-list" class="side-list"></div>
+        </section>
+        <section class="sidebar-section routes-section">
+          <div class="section-heading">
+            <div>
+              <span class="eyebrow">ROUTES</span>
+              <h2>Port routes</h2>
+            </div>
+            <span id="active-count" class="count-badge">0</span>
+          </div>
+          <div id="route-list" class="side-list route-side-list"></div>
+        </section>
+        <button id="logs-button" class="logs-toggle" type="button">
+          <span>Runtime logs</span>
+          <span id="log-count">0</span>
+        </button>
+      </aside>
+
+      <section class="canvas-panel">
+        <div class="canvas-toolbar">
+          <div>
+            <strong>Routing map</strong>
+            <span>Drag nodes to move. Ctrl+drag to connect. Drag the background to pan.</span>
+          </div>
+          <div class="legend">
+            <span><i class="legend-dot running"></i>Running</span>
+            <span><i class="legend-dot reconnecting"></i>Reconnecting</span>
+            <span><i class="legend-dot error"></i>Error</span>
+          </div>
+        </div>
+        <div id="canvas-viewport" class="canvas-viewport">
+          <div id="graph-world" class="graph-world">
+            <div id="graph-canvas" class="graph-canvas">
+              <svg id="edge-layer" class="edge-layer" width="1800" height="1100" aria-label="Port routes">
+                <defs>
+                  <marker id="arrow-idle" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z"></path></marker>
+                  <marker id="arrow-running" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z"></path></marker>
+                  <marker id="arrow-error" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z"></path></marker>
+                </defs>
+                <g id="edges"></g>
+                <path id="draft-edge" class="draft-edge is-hidden" d=""></path>
+              </svg>
+              <div id="edge-editor-layer" class="edge-editor-layer"></div>
+              <div id="nodes" class="nodes-layer"></div>
+              <div id="canvas-empty-hint" class="canvas-empty-hint is-hidden">
+                <span class="empty-orbit">+</span>
+                <strong>Add your first server</strong>
+                <p>Add a server, then hold Ctrl and drag between nodes to create a port route.</p>
+                <button id="empty-add-server" class="button button-primary" type="button">Add server</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="zoom-controls" aria-label="Canvas zoom controls">
+          <button id="zoom-out" type="button" aria-label="Zoom out">-</button>
+          <button id="zoom-reset" type="button" aria-label="Reset zoom"><span id="zoom-level">100%</span></button>
+          <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
+        </div>
+      </section>
+
+      <aside id="inspector" class="inspector">
+        <div id="inspector-empty" class="inspector-empty">
+          <div class="inspector-empty-icon">&#8644;</div>
+          <h2>Select a route</h2>
+          <p>Select an edge to inspect its listener, destination, traffic, and errors.</p>
+        </div>
+        <div id="inspector-content" class="inspector-content is-hidden"></div>
+      </aside>
+    </main>
+
+    <section id="log-drawer" class="log-drawer" aria-hidden="true">
+      <div class="log-header">
+        <div><strong>Runtime logs</strong><span>Passwords and key contents are never recorded</span></div>
+        <div>
+          <button id="clear-log-view" class="tiny-text-button" type="button">Clear view</button>
+          <button id="close-logs" class="icon-button small" type="button" aria-label="Close logs">x</button>
+        </div>
+      </div>
+      <div id="log-list" class="log-list"></div>
+    </section>
+
+    <div id="modal-backdrop" class="modal-backdrop is-hidden">
+      <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"></div>
+    </div>
+    <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
+    <div id="loading" class="loading-screen">
+      <img src="../../assets/icon.svg" alt="">
+      <strong>PortPatch</strong>
+      <span>Preparing the routing engine...</span>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+{
+  "name": "portpatch",
+  "version": "0.1.0",
+  "description": "Visual any-to-any SSH port routing for Windows and Linux",
+  "main": "src/main.js",
+  "author": "PortPatch contributors",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test --test-isolation=none test/english-only.test.js test/model.test.js test/socks5.test.js test/config-store.test.js test/secret-store.test.js test/credential-policy.test.js test/connection-manager.test.js test/relay-engine.test.js test/ssh-relay-integration.test.js",
+    "icons": "electron scripts/rasterize-icons.js",
+    "pack": "electron-builder --dir",
+    "dist": "pnpm dist:win",
+    "dist:win": "electron-builder --win portable",
+    "dist:linux": "electron-builder --linux AppImage"
+  },
+  "dependencies": {
+    "ssh2": "^1.17.0"
+  },
+  "devDependencies": {
+    "electron": "43.2.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "io.github.plainpacket.portpatch",
+    "productName": "PortPatch",
+    "asar": true,
+    "npmRebuild": false,
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "LICENSE",
+      "README.md",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        "portable"
+      ],
+      "artifactName": "${productName}-${version}-windows-${arch}-portable.${ext}"
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "target": [
+        "AppImage"
+      ],
+      "category": "Network",
+      "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
+    }
+  }
+}

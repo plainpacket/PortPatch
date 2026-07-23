@@ -1,0 +1,63 @@
+name: Release portable app
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows-portable:
+    name: Build Windows portable executable
+    runs-on: windows-latest
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Build portable executable
+        run: pnpm dist:win
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $asset = Get-ChildItem release -Filter "*-portable.exe" | Select-Object -First 1
+          if (-not $asset) {
+            throw "Portable executable was not generated."
+          }
+          $releaseExists = gh release view $env:GITHUB_REF_NAME `
+            --repo $env:GITHUB_REPOSITORY 2>$null
+
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:GITHUB_REF_NAME $asset.FullName `
+              --repo $env:GITHUB_REPOSITORY `
+              --clobber
+          } else {
+            gh release create $env:GITHUB_REF_NAME $asset.FullName `
+              --repo $env:GITHUB_REPOSITORY `
+              --title "PortPatch $env:GITHUB_REF_NAME" `
+              --generate-notes
+          }

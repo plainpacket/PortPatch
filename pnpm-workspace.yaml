@@ -1,0 +1,5 @@
+allowBuilds:
+  cpu-features: false
+  electron: true
+  electron-winstaller: false
+  ssh2: false
