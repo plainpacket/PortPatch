@@ -243,6 +243,10 @@ button { color: inherit; }
 .form-field input::placeholder { color: #4f5d72; }
 .input-with-button { display: grid; grid-template-columns: 1fr auto; gap: 7px; }
 .form-help { color: var(--muted-2); font-size: 8px; line-height: 1.5; }
+.detected-key-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; margin-top: 1px; }
+.detected-key-row > span { color: var(--teal); font-size: 8px; font-weight: 700; }
+.detected-key-row select { height: 30px; min-width: 0; border: 1px solid #33415c; border-radius: 7px; outline: 0; background: #0a1120; color: #cbd5e1; padding: 0 8px; font-size: 9px; }
+.detected-key-row select:focus { border-color: var(--purple); }
 .form-divider { grid-column: 1 / -1; height: 1px; background: var(--line); margin: 2px 0; }
 .section-label { grid-column: 1 / -1; margin: 2px 0 -4px; color: var(--purple); font-size: 9px; font-weight: 750; letter-spacing: 0.07em; }
 .checkbox-field { display: flex; align-items: center; gap: 8px; min-height: 31px; }
@@ -257,6 +261,13 @@ button { color: inherit; }
 .test-result code { display: block; margin-top: 4px; font-family: "Cascadia Mono", monospace; font-size: 8px; user-select: text; }
 .danger-zone { margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
 .danger-zone span { color: var(--muted); font-size: 9px; }
+.help-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; padding-bottom: 14px; }
+.help-item { min-width: 0; display: flex; align-items: flex-start; gap: 10px; padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
+.help-item kbd { flex: 0 0 auto; min-width: 82px; padding: 5px 7px; border: 1px solid #435271; border-bottom-width: 2px; border-radius: 6px; background: #0a1120; color: #d8deea; text-align: center; font-family: inherit; font-size: 8px; }
+.help-item div { min-width: 0; }
+.help-item strong, .help-item span { display: block; }
+.help-item strong { font-size: 10px; }
+.help-item span { margin-top: 4px; color: var(--muted); font-size: 8px; line-height: 1.45; }
 
 .toast-stack { position: fixed; z-index: 150; right: 18px; bottom: 18px; display: flex; flex-direction: column; gap: 8px; width: 330px; pointer-events: none; }
 .toast { padding: 11px 13px; border: 1px solid #3a4966; border-radius: 10px; background: #152037; box-shadow: var(--shadow); font-size: 10px; line-height: 1.45; animation: toast-in 170ms ease-out; }

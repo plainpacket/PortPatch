@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('sshRouter', Object.freeze({
   getState: () => invoke('state:get'),
   saveConfig: (payload) => invoke('config:save', payload),
   selectKeyFile: () => invoke('dialog:select-key'),
+  listPrivateKeys: () => invoke('ssh-keys:list'),
   probeServerKey: (server) => invoke('server:probe-key', { server }),
   testServer: (server, credentialDraft) => invoke('server:test', { server, credentialDraft }),
   startRoute: (routeId) => invoke('route:start', { routeId }),

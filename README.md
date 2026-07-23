@@ -9,6 +9,8 @@ Current version: `0.1.0` - Windows MVP - MIT License
 - A free-form node graph for your computer and multiple SSH servers
 - Drag node cards to arrange the map; hold `Ctrl` and drag one node onto another to create a directed route
 - Pan the routing map by dragging its background and zoom around the mouse pointer with the wheel
+- Parallel routes between the same nodes are separated into distinct curved lanes
+- Private keys in `~/.ssh` are detected locally when adding a server
 - Local-to-remote, remote-to-local, and remote-to-remote TCP relays
 - SOCKS5 routes in either direction
   - Listen on your computer and use a remote server as the egress
@@ -61,11 +63,13 @@ For a browser, configure `127.0.0.1:1080` as its SOCKS5 proxy and enable proxy-b
 ## Quick start
 
 1. Download the portable Windows executable from [GitHub Releases](https://github.com/plainpacket/PortPatch/releases) and run it.
-2. Select `Add server`, then enter the SSH address, user, and authentication method.
+2. Select `Add server`, then enter the SSH address, user, and authentication method. For private-key authentication, PortPatch detects recognized keys in `~/.ssh` and lets you choose a different file when needed.
 3. Select `Test connection`, verify the SHA-256 host-key fingerprint, and trust it only if it is correct. PortPatch does not send a password or private key before this confirmation.
 4. Hold `Ctrl` and drag the node that should accept connections onto the node that should receive the traffic. Drag without `Ctrl` to rearrange nodes, drag the background to pan, and use the mouse wheel to zoom.
 5. Enter the two ports in the compact editor on the new edge. Open `Advanced` only when you need to change addresses, route type, startup, or reconnection behavior.
 6. Close the window to keep routes running in the system tray. Use the tray menu to quit completely.
+
+Select the `?` button at any time to review the map controls.
 
 The SSH server must permit the required forwarding through `AllowTcpForwarding`. A restrictive server may return an error such as `administratively prohibited`. Its `GatewayPorts` policy also controls the actual exposure of remotely bound ports.
 

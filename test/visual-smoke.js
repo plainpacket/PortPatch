@@ -58,6 +58,10 @@ function registerMockIpc() {
   for (const channel of ['server:probe-key', 'server:test', 'route:start', 'route:stop', 'route:start-all', 'route:stop-all', 'window:show', 'app:quit', 'dialog:select-key']) {
     ipcMain.handle(channel, () => response(null));
   }
+  ipcMain.handle('ssh-keys:list', () => response([
+    { name: 'id_ed25519', path: 'C:\\Users\\demo\\.ssh\\id_ed25519', preferred: true },
+    { name: 'project-key', path: 'C:\\Users\\demo\\.ssh\\project-key', preferred: false },
+  ]));
 }
 
 async function capture(window, filename) {
@@ -65,6 +69,8 @@ async function capture(window, filename) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       window.webContents.invalidate();
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      await window.webContents.capturePage();
       await new Promise((resolve) => setTimeout(resolve, 80));
       const image = await window.webContents.capturePage();
       await fs.writeFile(path.join(outputDirectory, filename), image.toPNG());
@@ -321,15 +327,65 @@ async function run() {
       && label.textContent.includes(String.fromCharCode(8594))
       && label.textContent.includes(':9000')
       && !label.textContent.includes('->')),
-    edges: document.querySelectorAll('.edge-group').length
+    edges: document.querySelectorAll('.edge-group').length,
+    parallelRoutes: (() => {
+      const groups = [...document.querySelectorAll('.edge-group')].filter((group) => {
+        const text = group.querySelector('.edge-label')?.textContent || '';
+        return text.includes(':18000') || text.includes(':19000');
+      });
+      const paths = groups.map((group) => group.querySelector('.route-edge')?.getAttribute('d'));
+      const labels = groups.map((group) => group.querySelector('.edge-label-bg')?.getBoundingClientRect());
+      const labelsOverlap = labels.length === 2
+        && labels[0].left < labels[1].right
+        && labels[0].right > labels[1].left
+        && labels[0].top < labels[1].bottom
+        && labels[0].bottom > labels[1].top;
+      return {
+        count: groups.length,
+        distinctPaths: new Set(paths).size,
+        labelsOverlap,
+      };
+    })()
   })`);
-  if (!savedRoute.editorClosed || !savedRoute.matchingLabel || savedRoute.edges !== 4) {
+  if (!savedRoute.editorClosed || !savedRoute.matchingLabel || savedRoute.edges !== 4
+    || savedRoute.parallelRoutes.count !== 2
+    || savedRoute.parallelRoutes.distinctPaths !== 2
+    || savedRoute.parallelRoutes.labelsOverlap) {
     throw new Error(`Inline route save validation failed: ${JSON.stringify(savedRoute)}`);
   }
 
   await executeChecked(window, 'open server modal', `window.openServerModal()`);
   await new Promise((resolve) => setTimeout(resolve, 200));
+  const keyDetection = await window.webContents.executeJavaScript(`({
+    selectedPath: document.querySelector('#server-key-path')?.value,
+    detectedOptions: document.querySelectorAll('#detected-key-select option').length,
+    detectionVisible: !document.querySelector('#detected-key-row')?.classList.contains('is-hidden'),
+    status: document.querySelector('#key-detection-status')?.textContent
+  })`);
+  if (keyDetection.selectedPath !== 'C:\\Users\\demo\\.ssh\\id_ed25519'
+    || keyDetection.detectedOptions !== 2
+    || !keyDetection.detectionVisible
+    || !keyDetection.status.includes('2 private keys detected')) {
+    throw new Error(`Private key detection validation failed: ${JSON.stringify(keyDetection)}`);
+  }
   await capture(window, '04-server-modal.png');
+
+  await executeChecked(window, 'open help modal', `(() => {
+    document.querySelector('[data-close-modal]').click();
+    document.querySelector('#help-button').click();
+    return true;
+  })()`);
+  const helpModal = await window.webContents.executeJavaScript(`({
+    title: document.querySelector('#modal-title')?.textContent,
+    items: document.querySelectorAll('.help-item').length,
+    includesConnect: document.querySelector('#modal')?.textContent.includes('Ctrl + drag'),
+    includesZoom: document.querySelector('#modal')?.textContent.includes('Mouse wheel')
+  })`);
+  if (helpModal.title !== 'Using the routing map' || helpModal.items !== 6
+    || !helpModal.includesConnect || !helpModal.includesZoom) {
+    throw new Error(`Help modal validation failed: ${JSON.stringify(helpModal)}`);
+  }
+  await capture(window, '05-help-modal.png');
 
   if (errors.length) throw new Error(`Renderer console errors: ${errors.join(' | ')}`);
   window.destroy();

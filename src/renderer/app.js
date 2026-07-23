@@ -27,6 +27,7 @@ const GRAPH_WIDTH = 1800;
 const GRAPH_HEIGHT = 1100;
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 1.8;
+const PARALLEL_EDGE_GAP = 136;
 
 const STATUS_LABELS = {
   idle: 'Stopped',
@@ -338,21 +339,6 @@ function nodeBoundaryPoint(nodeId, toward) {
   return { x: center.x + dx * scale, y: center.y + dy * scale };
 }
 
-function routeAnchors(sourceNodeId, targetNodeId) {
-  const sourceCenter = nodeCenter(sourceNodeId);
-  const targetCenter = nodeCenter(targetNodeId);
-  if (sourceNodeId === targetNodeId) {
-    return {
-      source: { x: sourceCenter.x + 115, y: sourceCenter.y },
-      target: { x: targetCenter.x - 115, y: targetCenter.y },
-    };
-  }
-  return {
-    source: nodeBoundaryPoint(sourceNodeId, targetCenter),
-    target: nodeBoundaryPoint(targetNodeId, sourceCenter),
-  };
-}
-
 function edgePath(source, target) {
   const dx = target.x - source.x;
   const dy = target.y - source.y;
@@ -366,14 +352,74 @@ function edgePath(source, target) {
   return `M ${source.x} ${source.y} C ${source.x} ${source.y + direction * control}, ${target.x} ${target.y - direction * control}, ${target.x} ${target.y}`;
 }
 
+function routePairKey(route) {
+  return [route.source.nodeId, route.target.nodeId].sort().join('\u0000');
+}
+
+function routeLaneOffset(route) {
+  const pairKey = routePairKey(route);
+  const parallelRoutes = state.config.routes.filter((candidate) => routePairKey(candidate) === pairKey);
+  const index = parallelRoutes.findIndex((candidate) => candidate.id === route.id);
+  return (index - (parallelRoutes.length - 1) / 2) * PARALLEL_EDGE_GAP;
+}
+
+function cubicPoint(source, firstControl, secondControl, target, progress = 0.5) {
+  const remaining = 1 - progress;
+  return {
+    x: remaining ** 3 * source.x
+      + 3 * remaining ** 2 * progress * firstControl.x
+      + 3 * remaining * progress ** 2 * secondControl.x
+      + progress ** 3 * target.x,
+    y: remaining ** 3 * source.y
+      + 3 * remaining ** 2 * progress * firstControl.y
+      + 3 * remaining * progress ** 2 * secondControl.y
+      + progress ** 3 * target.y,
+  };
+}
+
+function routeGeometry(route) {
+  const sourceCenter = nodeCenter(route.source.nodeId);
+  const targetCenter = nodeCenter(route.target.nodeId);
+  const canonicalIds = [route.source.nodeId, route.target.nodeId].sort();
+  const canonicalSource = nodeCenter(canonicalIds[0]);
+  const canonicalTarget = nodeCenter(canonicalIds[1]);
+  const dx = canonicalTarget.x - canonicalSource.x;
+  const dy = canonicalTarget.y - canonicalSource.y;
+  const distance = Math.hypot(dx, dy) || 1;
+  const laneOffset = routeLaneOffset(route);
+  const normal = { x: -dy / distance, y: dx / distance };
+  const midpoint = {
+    x: (sourceCenter.x + targetCenter.x) / 2 + (-dy / distance) * laneOffset,
+    y: (sourceCenter.y + targetCenter.y) / 2 + (dx / distance) * laneOffset,
+  };
+  const source = nodeBoundaryPoint(route.source.nodeId, midpoint);
+  const target = nodeBoundaryPoint(route.target.nodeId, midpoint);
+  const firstControl = {
+    x: source.x + (target.x - source.x) / 3 + normal.x * laneOffset,
+    y: source.y + (target.y - source.y) / 3 + normal.y * laneOffset,
+  };
+  const secondControl = {
+    x: source.x + (target.x - source.x) * 2 / 3 + normal.x * laneOffset,
+    y: source.y + (target.y - source.y) * 2 / 3 + normal.y * laneOffset,
+  };
+  return {
+    source,
+    target,
+    firstControl,
+    secondControl,
+    label: cubicPoint(source, firstControl, secondControl, target),
+    path: `M ${source.x} ${source.y} C ${firstControl.x} ${firstControl.y}, ${secondControl.x} ${secondControl.y}, ${target.x} ${target.y}`,
+  };
+}
+
 function renderEdges() {
   const groups = state.config.routes.map((route) => {
-    const { source, target } = routeAnchors(route.source.nodeId, route.target.nodeId);
-    const path = edgePath(source, target);
+    const geometry = routeGeometry(route);
+    const { path } = geometry;
     const status = routeStatus(route.id);
     const selected = state.selectedRouteId === route.id ? 'selected' : '';
-    const x = (source.x + target.x) / 2;
-    const y = (source.y + target.y) / 2 - 9;
+    const x = geometry.label.x;
+    const y = geometry.label.y - 9;
     const sourcePort = route.source.port || '----';
     const targetPort = route.target.port || '----';
     const labelTarget = route.protocol === 'socks5' ? 'SOCKS5' : `:${targetPort}`;
@@ -697,6 +743,11 @@ function serverFormTemplate(server, existing, metadata) {
         <div id="key-fields" class="form-field full">
           <label for="server-key-path">Private key file</label>
           <div class="input-with-button"><input id="server-key-path" value="${escapeHtml(server.keyPath)}" placeholder="~/.ssh/id_ed25519"><button id="browse-key" class="button button-ghost" type="button">Browse</button></div>
+          <div id="detected-key-row" class="detected-key-row is-hidden">
+            <span>Detected in ~/.ssh</span>
+            <select id="detected-key-select" aria-label="Detected private keys"></select>
+          </div>
+          <span id="key-detection-status" class="form-help">Looking for private keys in ~/.ssh...</span>
         </div>
         <div id="passphrase-field" class="form-field full"><label for="server-passphrase">Key passphrase ${metadata.hasPassphrase ? '- saved' : '- optional'}</label><input id="server-passphrase" type="password" autocomplete="new-password" placeholder="${metadata.hasPassphrase ? 'Enter a new value to change it' : 'Required only for encrypted keys'}"></div>
         <div id="clear-passphrase-field" class="checkbox-field full ${metadata.hasPassphrase ? '' : 'is-hidden'}"><input id="clear-passphrase" type="checkbox"><label for="clear-passphrase">Remove the saved passphrase; the new private key has no passphrase</label></div>
@@ -783,6 +834,32 @@ function openServerModal(serverId = null) {
     const file = await api.selectKeyFile();
     if (file) $('#server-key-path').value = file;
   });
+  const loadDetectedKeys = async () => {
+    const status = $('#key-detection-status');
+    const row = $('#detected-key-row');
+    const select = $('#detected-key-select');
+    const keyPath = $('#server-key-path');
+    try {
+      const keys = await api.listPrivateKeys();
+      if (!$('#server-form') || !status || !row || !select || !keyPath) return;
+      if (!keys.length) {
+        status.textContent = 'No private keys were detected. Select a file manually.';
+        return;
+      }
+      select.innerHTML = keys.map((key) => `<option value="${escapeHtml(key.path)}">${escapeHtml(key.name)}${key.preferred ? ' - OpenSSH default' : ''}</option>`).join('');
+      const matchingIndex = keys.findIndex((key) => key.path === keyPath.value);
+      if (matchingIndex >= 0) select.selectedIndex = matchingIndex;
+      else if (!keyPath.value) keyPath.value = keys[0].path;
+      row.classList.remove('is-hidden');
+      status.textContent = `${keys.length} private key${keys.length === 1 ? '' : 's'} detected. Key contents never leave this computer.`;
+      select.addEventListener('change', () => {
+        keyPath.value = select.value;
+      });
+    } catch (error) {
+      if (status) status.textContent = `Could not scan ~/.ssh: ${error.message}`;
+    }
+  };
+  loadDetectedKeys();
 
   $('#test-server').addEventListener('click', async () => {
     const button = $('#test-server');
@@ -957,9 +1034,9 @@ function positionRouteEditor() {
   if (!editorState || !editor) return;
   const route = state.config.routes.find((item) => item.id === editorState.routeId);
   if (!route) return;
-  const { source, target } = routeAnchors(route.source.nodeId, route.target.nodeId);
-  editor.style.left = `${(source.x + target.x) / 2}px`;
-  editor.style.top = `${(source.y + target.y) / 2 + 22}px`;
+  const geometry = routeGeometry(route);
+  editor.style.left = `${geometry.label.x}px`;
+  editor.style.top = `${geometry.label.y + 22}px`;
 }
 
 function closeRouteEditor(discardNew = true) {
@@ -1151,6 +1228,31 @@ function openSettingsModal() {
   });
 }
 
+function helpTemplate() {
+  return `
+    <div class="modal-header">
+      <div><h2 id="modal-title">Using the routing map</h2><p>The map works like a compact diagram editor.</p></div>
+      <button class="icon-button small" data-close-modal type="button" aria-label="Close">x</button>
+    </div>
+    <div class="modal-body">
+      <div class="help-grid">
+        <div class="help-item"><kbd>Drag a node</kbd><div><strong>Move a node</strong><span>Arrange servers anywhere on the routing map.</span></div></div>
+        <div class="help-item"><kbd>Ctrl + drag</kbd><div><strong>Create a route</strong><span>Drag from the listening node to the destination node.</span></div></div>
+        <div class="help-item"><kbd>Drag empty space</kbd><div><strong>Pan the map</strong><span>Move the viewport without changing node positions.</span></div></div>
+        <div class="help-item"><kbd>Mouse wheel</kbd><div><strong>Zoom</strong><span>Zoom around the current pointer position.</span></div></div>
+        <div class="help-item"><kbd>Click an edge</kbd><div><strong>Edit a route</strong><span>Change ports and advanced forwarding settings inline.</span></div></div>
+        <div class="help-item"><kbd>Close window</kbd><div><strong>Keep routes active</strong><span>PortPatch continues running from the system tray.</span></div></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="button button-primary" data-close-modal type="button">Got it</button>
+    </div>`;
+}
+
+function openHelpModal() {
+  openModal(helpTemplate());
+}
+
 function renderLogs() {
   const entries = state.logs.filter((_entry, index) => index >= state.logViewClearedAt);
   $('#log-count').textContent = state.logs.length;
@@ -1181,6 +1283,7 @@ function bindStaticEvents() {
   $('#sidebar-add-server').addEventListener('click', () => openServerModal());
   $('#empty-add-server').addEventListener('click', () => openServerModal());
   $('#settings-button').addEventListener('click', openSettingsModal);
+  $('#help-button').addEventListener('click', openHelpModal);
   $('#start-all-button').addEventListener('click', async () => {
     try { await api.startAll(); } catch (error) { toast(error.message, 'error'); }
   });

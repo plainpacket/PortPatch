@@ -23,6 +23,7 @@ const {
 const { RelayEngine } = require('./core/relay-engine');
 const { routeSignature, validateConfig } = require('./core/model');
 const { shouldValidateCredentialUpdate, validateCredentialUpdate } = require('./core/credential-policy');
+const { discoverPrivateKeys } = require('./core/ssh-key-discovery');
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
@@ -342,6 +343,8 @@ function registerIpc() {
     });
     return result.canceled ? null : result.filePaths[0];
   });
+
+  handle('ssh-keys:list', () => discoverPrivateKeys(app.getPath('home')));
 
   handle('server:probe-key', async ({ server } = {}) => {
     if (!server?.host) throw new Error('A server address is required.');
