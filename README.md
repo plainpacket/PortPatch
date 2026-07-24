@@ -4,6 +4,8 @@ PortPatch is a portable desktop application that represents your computer and SS
 
 Current version: `0.3.0` - Windows MVP - MIT License
 
+![PortPatch demo](./docs/portpatch-demo.gif)
+
 ## Features
 
 - A free-form node graph for your computer and multiple SSH servers
