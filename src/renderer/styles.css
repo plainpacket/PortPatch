@@ -427,6 +427,8 @@ button { color: inherit; }
 [data-theme="light"] .form-details { background: rgba(241, 245, 249, 0.72); }
 [data-theme="light"] .notice { color: #99540b; background: rgba(217, 119, 6, 0.08); }
 [data-theme="light"] .notice.info { color: #087f70; }
+[data-theme="light"] .edge-exposure-warning { border-color: #e5a33a; background: #fff7e8; color: #713b08; }
+[data-theme="light"] .edge-exposure-warning label { color: #713b08; }
 [data-theme="light"] .help-item kbd { border-color: #aebbd0; background: #f8fafc; color: #334155; }
 [data-theme="light"] .toast { border-color: #bdc9d8; background: #ffffff; }
 [data-theme="light"] .toast.success { color: #087f70; }

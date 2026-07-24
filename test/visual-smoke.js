@@ -153,6 +153,13 @@ async function run() {
     || connectingArrow.arrowAnimation !== 'none') {
     throw new Error(`Connecting arrow validation failed: ${JSON.stringify(connectingArrow)}`);
   }
+  const loopbackLabel = await window.webContents.executeJavaScript(
+    `document.querySelector('[data-edge-id="llm"] .edge-label').textContent.replace(/\\s+/g, ' ').trim()`,
+  );
+  if (!loopbackLabel.includes('18000') || !loopbackLabel.includes('8000')
+    || loopbackLabel.includes(':18000') || loopbackLabel.includes(':8000')) {
+    throw new Error(`Loopback edge label validation failed: ${loopbackLabel}`);
+  }
   await capture(window, '01-graph.png');
 
   const stagedNodeMove = await executeChecked(window, 'stage two node moves while the first save is pending', `(() => {
@@ -341,6 +348,7 @@ async function run() {
   await executeChecked(window, 'save inline route', `(() => {
     document.querySelector('#edge-source-port').value = '19000';
     document.querySelector('#edge-target-port').value = '9000';
+    document.querySelector('#edge-target-host').value = '10.0.0.5';
     document.querySelector('#edge-route-form').requestSubmit();
     return true;
   })()`);
@@ -348,15 +356,16 @@ async function run() {
   const savedRoute = await window.webContents.executeJavaScript(`({
     editorClosed: !document.querySelector('#edge-route-form'),
     matchingLabel: [...document.querySelectorAll('.edge-label')].some((label) =>
-      label.textContent.includes(':19000')
+      label.textContent.includes('19000')
       && label.textContent.includes(String.fromCharCode(8594))
-      && label.textContent.includes(':9000')
+      && label.textContent.includes('10.0.0.5:9000')
+      && !label.textContent.includes(':19000')
       && !label.textContent.includes('->')),
     edges: document.querySelectorAll('.edge-group').length,
     parallelRoutes: (() => {
       const groups = [...document.querySelectorAll('.edge-group')].filter((group) => {
         const text = group.querySelector('.edge-label')?.textContent || '';
-        return text.includes(':18000') || text.includes(':19000');
+        return text.includes('18000') || text.includes('19000');
       });
       const paths = groups.map((group) => group.querySelector('.route-edge')?.getAttribute('d'));
       const labels = groups.map((group) => group.querySelector('.edge-label-bg')?.getBoundingClientRect());
@@ -501,7 +510,33 @@ async function run() {
   if (appliedScale !== 90) throw new Error(`Interface scale was not applied: ${appliedScale}`);
   const appliedTheme = await window.webContents.executeJavaScript(`document.documentElement.dataset.theme`);
   if (appliedTheme !== 'light') throw new Error(`Interface theme was not applied: ${appliedTheme}`);
-  await capture(window, '09-light-theme-graph.png');
+  const lightWarning = await executeChecked(window, 'check the light-theme exposure warning', `(() => {
+    window.openRouteEditor('llm');
+    const bind = document.querySelector('#edge-source-bind');
+    bind.value = '0.0.0.0';
+    bind.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('#edge-advanced').open = true;
+    const warning = document.querySelector('#edge-exposure-warning');
+    const style = getComputedStyle(warning);
+    return {
+      visible: !warning.classList.contains('is-hidden'),
+      color: style.color,
+      backgroundColor: style.backgroundColor,
+      labelColor: getComputedStyle(warning.querySelector('label')).color
+    };
+  })()`);
+  if (!lightWarning.visible
+    || lightWarning.color !== 'rgb(113, 59, 8)'
+    || lightWarning.labelColor !== 'rgb(113, 59, 8)'
+    || lightWarning.backgroundColor !== 'rgb(255, 247, 232)') {
+    throw new Error(`Light-theme warning contrast validation failed: ${JSON.stringify(lightWarning)}`);
+  }
+  await capture(window, '09-light-theme-warning.png');
+  await executeChecked(window, 'close the light-theme warning editor', `(() => {
+    document.querySelector('#edge-editor-close').click();
+    return true;
+  })()`);
+  await capture(window, '10-light-theme-graph.png');
 
   if (errors.length) throw new Error(`Renderer console errors: ${errors.join(' | ')}`);
   window.destroy();

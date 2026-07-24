@@ -429,6 +429,15 @@ function routeGeometry(route) {
   };
 }
 
+function formatEdgeEndpoint(host, port) {
+  const displayPort = String(port || '----');
+  if (isLoopbackBind(host)) return displayPort;
+  let displayHost = String(host || '').trim();
+  if (displayHost.startsWith('[') && displayHost.endsWith(']')) displayHost = displayHost.slice(1, -1);
+  if (displayHost.includes(':')) displayHost = `[${displayHost}]`;
+  return `${displayHost}:${displayPort}`;
+}
+
 function renderEdges() {
   const groups = state.config.routes.map((route) => {
     const geometry = routeGeometry(route);
@@ -437,15 +446,17 @@ function renderEdges() {
     const selected = state.selectedRouteId === route.id ? 'selected' : '';
     const x = geometry.label.x;
     const y = geometry.label.y - 9;
-    const sourcePort = route.source.port || '----';
-    const targetPort = route.target.port || '----';
-    const labelTarget = route.protocol === 'socks5' ? 'SOCKS5' : `:${targetPort}`;
+    const labelSource = formatEdgeEndpoint(route.source.bindHost, route.source.port);
+    const labelTarget = route.protocol === 'socks5'
+      ? 'SOCKS5'
+      : formatEdgeEndpoint(route.target.host, route.target.port);
+    const labelWidth = Math.max(96, Math.min(230, 34 + `${labelSource} -> ${labelTarget}`.length * 5.7));
     return `
       <g class="edge-group" data-edge-id="${escapeHtml(route.id)}">
         <path class="route-edge ${statusClass(status)} ${selected}" d="${path}"></path>
         <path class="route-edge-hit" d="${path}"></path>
-        <rect class="edge-label-bg" x="${x - 48}" y="${y - 10}" width="96" height="29"></rect>
-        <text class="edge-label" x="${x}" y="${y + 1}"><tspan>:${escapeHtml(sourcePort)}</tspan><tspan class="edge-label-arrow"> &#8594; </tspan><tspan>${escapeHtml(labelTarget)}</tspan></text>
+        <rect class="edge-label-bg" x="${x - labelWidth / 2}" y="${y - 10}" width="${labelWidth}" height="29"></rect>
+        <text class="edge-label" x="${x}" y="${y + 1}"><tspan>${escapeHtml(labelSource)}</tspan><tspan class="edge-label-arrow"> &#8594; </tspan><tspan>${escapeHtml(labelTarget)}</tspan></text>
         <text class="edge-label-protocol" x="${x}" y="${y + 12}">${status.activeConnections || 0} connections</text>
       </g>`;
   }).join('');
