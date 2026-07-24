@@ -133,6 +133,7 @@ function createTray() {
 }
 
 function createWindow() {
+  const lightTheme = configStore?.get().settings.theme === 'light';
   mainWindow = new BrowserWindow({
     width: 1320,
     height: 820,
@@ -141,9 +142,13 @@ function createWindow() {
     show: false,
     ...(process.platform === 'win32' ? {
       titleBarStyle: 'hidden',
-      titleBarOverlay: { color: '#0a101d', symbolColor: '#aab6ca', height: 64 },
+      titleBarOverlay: {
+        color: lightTheme ? '#f8fafc' : '#0a101d',
+        symbolColor: lightTheme ? '#334155' : '#aab6ca',
+        height: 64,
+      },
     } : {}),
-    backgroundColor: '#0b1020',
+    backgroundColor: lightTheme ? '#f1f5f9' : '#0b1020',
     icon: iconImage(),
     title: 'PortPatch',
     webPreferences: {
@@ -176,6 +181,19 @@ function createWindow() {
       app.quit();
     }
   });
+}
+
+function applyWindowTheme(theme) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const light = theme === 'light';
+  mainWindow.setBackgroundColor(light ? '#f1f5f9' : '#0b1020');
+  if (process.platform === 'win32') {
+    mainWindow.setTitleBarOverlay({
+      color: light ? '#f8fafc' : '#0a101d',
+      symbolColor: light ? '#334155' : '#aab6ca',
+      height: 64,
+    });
+  }
 }
 
 function applyLoginSetting(settings) {
@@ -382,6 +400,9 @@ function registerIpc() {
     return relayEngine.startAll();
   });
   handle('route:stop-all', async () => relayEngine.stopAll());
+  handle('window:set-theme', async ({ theme } = {}) => {
+    applyWindowTheme(theme === 'light' ? 'light' : 'dark');
+  });
   handle('window:show', async () => showMainWindow());
   handle('app:quit', async () => app.quit());
 }

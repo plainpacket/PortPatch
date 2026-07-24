@@ -16,12 +16,22 @@ test('a new configuration has a local node and safe defaults', () => {
   assert.equal(config.localNode.id, 'local');
   assert.equal(config.settings.closeToTray, true);
   assert.equal(config.settings.uiScale, 100);
+  assert.equal(config.settings.uiScaleVersion, 2);
+  assert.equal(config.settings.theme, 'dark');
   assert.deepEqual(config.servers, []);
+});
+
+test('interface theme accepts dark and light only', () => {
+  assert.equal(normalizeConfig({ settings: { theme: 'light' } }).settings.theme, 'light');
+  assert.equal(normalizeConfig({ settings: { theme: 'dark' } }).settings.theme, 'dark');
+  assert.equal(normalizeConfig({ settings: { theme: 'blue' } }).settings.theme, 'dark');
 });
 
 test('interface scale accepts supported sizes and rejects arbitrary zoom values', () => {
   assert.equal(normalizeConfig({ settings: { uiScale: 90 } }).settings.uiScale, 90);
   assert.equal(normalizeConfig({ settings: { uiScale: 93 } }).settings.uiScale, 100);
+  assert.equal(normalizeConfig({ settings: { uiScale: 110 } }).settings.uiScale, 100);
+  assert.equal(normalizeConfig({ settings: { uiScale: 110, uiScaleVersion: 2 } }).settings.uiScale, 110);
 });
 
 test('legacy per-route automatic startup is removed during normalization', () => {

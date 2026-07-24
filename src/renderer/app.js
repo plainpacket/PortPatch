@@ -18,13 +18,14 @@ const state = {
   nodeDrag: null,
   canvasPan: null,
   routeEditor: null,
+  modalCleanup: null,
   suppressNodeClick: false,
   zoom: 1,
   logViewClearedAt: 0,
 };
 
-const GRAPH_WIDTH = 1800;
-const GRAPH_HEIGHT = 1100;
+const GRAPH_WIDTH = 1200;
+const GRAPH_HEIGHT = 1200;
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 1.8;
 const PARALLEL_EDGE_GAP = 136;
@@ -49,6 +50,12 @@ function escapeHtml(value) {
 
 function clone(value) {
   return structuredClone(value);
+}
+
+function applyTheme(theme) {
+  const normalized = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = normalized;
+  api.setWindowTheme(normalized).catch(() => {});
 }
 
 function expandIpv6(host) {
@@ -201,6 +208,7 @@ async function persistConfig(secretUpdates = {}) {
 
 function renderSecurityBadge() {
   const badge = $('#security-badge');
+  if (!badge) return;
   if (!state.encryption) return;
   if (state.encryption.warning || !state.encryption.available) {
     badge.classList.add('warning');
@@ -276,6 +284,13 @@ function initials(name) {
   return chunks.length > 1 ? `${chunks[0][0]}${chunks[1][0]}`.toUpperCase() : cleaned.slice(0, 2).toUpperCase();
 }
 
+function visibleNodePosition(node) {
+  return {
+    x: Math.max(30, Math.min(GRAPH_WIDTH - 260, Number(node.position?.x || 0))),
+    y: Math.max(30, Math.min(GRAPH_HEIGHT - 142, Number(node.position?.y || 0))),
+  };
+}
+
 function renderGraph() {
   const nodes = graphNodes();
   $('#nodes').innerHTML = nodes.map((node) => {
@@ -297,8 +312,9 @@ function renderGraph() {
 
   for (const node of nodes) {
     const card = $(`[data-node-id="${CSS.escape(node.id)}"]`);
-    card.style.left = `${Math.max(30, Number(node.position?.x || 0))}px`;
-    card.style.top = `${Math.max(30, Number(node.position?.y || 0))}px`;
+    const position = visibleNodePosition(node);
+    card.style.left = `${position.x}px`;
+    card.style.top = `${position.y}px`;
   }
 
   $$('.node-card').forEach((card) => card.addEventListener('click', (event) => {
@@ -324,9 +340,10 @@ function renderGraph() {
 function nodeCenter(nodeId) {
   const node = nodeById(nodeId);
   if (!node) return { x: 0, y: 0 };
+  const position = visibleNodePosition(node);
   return {
-    x: Number(node.position?.x || 0) + 115,
-    y: Number(node.position?.y || 0) + 56,
+    x: position.x + 115,
+    y: position.y + 56,
   };
 }
 
@@ -504,13 +521,14 @@ function beginNodeDrag(event) {
   if (event.button !== 0 || event.target.closest('.node-menu')) return;
   const nodeId = event.currentTarget.dataset.nodeId;
   const node = nodeById(nodeId);
+  const position = visibleNodePosition(node);
   const pointer = canvasPoint(event.clientX, event.clientY);
   state.nodeDrag = {
     nodeId,
     startClientX: event.clientX,
     startClientY: event.clientY,
-    grabOffsetX: pointer.x - Number(node.position?.x || 0),
-    grabOffsetY: pointer.y - Number(node.position?.y || 0),
+    grabOffsetX: pointer.x - position.x,
+    grabOffsetY: pointer.y - position.y,
     active: false,
   };
   document.addEventListener('pointermove', moveNodeDrag);
@@ -712,8 +730,9 @@ async function toggleRoute(routeId) {
   }
 }
 
-function openModal(content, wide = false) {
+function openModal(content, wide = false, cleanup = null) {
   closeRouteEditor(true);
+  state.modalCleanup = cleanup;
   const modal = $('#modal');
   modal.className = `modal ${wide ? 'wide' : ''}`;
   modal.innerHTML = content;
@@ -721,9 +740,22 @@ function openModal(content, wide = false) {
   $$('[data-close-modal]', modal).forEach((button) => button.addEventListener('click', closeModal));
 }
 
-function closeModal() {
+function closeModal(options = {}) {
+  const cleanup = state.modalCleanup;
+  state.modalCleanup = null;
   $('#modal-backdrop').classList.add('is-hidden');
   $('#modal').innerHTML = '';
+  if (!options?.skipCleanup) cleanup?.();
+}
+
+function credentialStorageNote() {
+  if (state.encryption?.backend === 'dpapi') {
+    return 'Encrypted with Windows DPAPI for your Windows account. Stored at %APPDATA%\\PortPatch\\secrets.json.';
+  }
+  if (state.encryption?.backend === 'keychain') {
+    return 'Encrypted with the system keychain and stored in PortPatch per-user app data as secrets.json.';
+  }
+  return 'Stored in PortPatch per-user app data as secrets.json using the secure storage available on this system.';
 }
 
 function serverFormTemplate(server, existing, metadata) {
@@ -751,7 +783,14 @@ function serverFormTemplate(server, existing, metadata) {
             <div id="clear-passphrase-field" class="checkbox-field full ${metadata.hasPassphrase ? '' : 'is-hidden'}"><input id="clear-passphrase" type="checkbox"><label for="clear-passphrase">Remove the saved passphrase; the new private key has no passphrase</label></div>
           </div>
         </details>
-        <div id="password-field" class="form-field full"><label for="server-password">SSH password ${metadata.hasPassword ? '- saved' : ''}</label><input id="server-password" type="password" autocomplete="new-password" placeholder="${metadata.hasPassword ? 'Enter a new value to change it' : 'Enter password'}"></div>
+        <div id="password-field" class="form-field full">
+          <div class="credential-label-row">
+            <label for="server-password">SSH password</label>
+            <span class="credential-state ${metadata.hasPassword ? 'saved' : ''}">${metadata.hasPassword ? 'Saved securely' : 'Not saved'}</span>
+          </div>
+          <input id="server-password" type="password" autocomplete="new-password" placeholder="${metadata.hasPassword ? 'Leave blank to keep the saved password' : 'Enter password'}">
+          <span class="credential-storage-note">${metadata.hasPassword ? 'A password is already saved. Leave this field blank to keep it. ' : ''}${escapeHtml(credentialStorageNote())}</span>
+        </div>
         <div id="agent-notice" class="notice info">Uses a key already unlocked in Windows OpenSSH Agent or Pageant. PortPatch does not read a private key file or store a passphrase in this mode.</div>
         <div class="form-divider"></div>
         <div class="form-field full"><label for="server-fingerprint">Trusted host-key fingerprint - SHA-256</label><input id="server-fingerprint" value="${escapeHtml(server.hostFingerprint)}" readonly placeholder="Shown after a connection test"><span class="form-help">Verify it again if the server address or key changes.</span></div>
@@ -1192,6 +1231,7 @@ async function deleteRoute(routeId) {
 function settingsTemplate() {
   const settings = state.config.settings;
   const uiScale = Number(settings.uiScale || 100);
+  const theme = settings.theme === 'light' ? 'light' : 'dark';
   return `
     <div class="modal-header"><div><h2 id="modal-title">Application settings</h2><p>Configure Windows startup, tray behavior, and the local node name.</p></div><button class="icon-button small" data-close-modal type="button">x</button></div>
     <div class="modal-body">
@@ -1204,6 +1244,10 @@ function settingsTemplate() {
           <option value="110" ${uiScale === 110 ? 'selected' : ''}>110% - Large</option>
           <option value="125" ${uiScale === 125 ? 'selected' : ''}>125% - Extra large</option>
         </select><span class="form-help">Applied to the entire PortPatch interface and saved for the next launch.</span></div>
+        <div class="form-field full"><label for="ui-theme">Theme</label><select id="ui-theme">
+          <option value="dark" ${theme === 'dark' ? 'selected' : ''}>Dark</option>
+          <option value="light" ${theme === 'light' ? 'selected' : ''}>Light</option>
+        </select><span class="form-help">Previewed immediately and saved for the next launch.</span></div>
         <div class="form-divider"></div>
         <div class="checkbox-field full"><input id="close-to-tray" type="checkbox" ${settings.closeToTray ? 'checked' : ''}><label for="close-to-tray">Hide in the system tray instead of quitting when the window closes</label></div>
         <div class="section-label">WINDOWS STARTUP</div>
@@ -1218,13 +1262,22 @@ function settingsTemplate() {
 }
 
 function openSettingsModal() {
-  openModal(settingsTemplate());
+  const originalScale = Number(state.config.settings.uiScale || 100);
+  const originalTheme = state.config.settings.theme === 'light' ? 'light' : 'dark';
+  openModal(settingsTemplate(), false, () => {
+    api.setUiScale(originalScale);
+    applyTheme(originalTheme);
+  });
   const updateWindowsStartupFields = () => {
     const enabled = $('#start-with-system').checked && state.platform !== 'linux';
     $('#launch-hidden').disabled = !enabled;
     if (!enabled) $('#launch-hidden').checked = false;
   };
   $('#start-with-system').addEventListener('change', updateWindowsStartupFields);
+  $('#ui-scale').addEventListener('change', () => {
+    api.setUiScale(Number($('#ui-scale').value));
+  });
+  $('#ui-theme').addEventListener('change', () => applyTheme($('#ui-theme').value));
   updateWindowsStartupFields();
   $('#save-settings').addEventListener('click', async () => {
     const name = $('#local-name').value.trim();
@@ -1235,14 +1288,17 @@ function openSettingsModal() {
       startWithSystem: $('#start-with-system').checked,
       launchHidden: $('#launch-hidden').checked,
       uiScale: Number($('#ui-scale').value),
+      uiScaleVersion: 2,
+      theme: $('#ui-theme').value,
     };
-    closeModal();
-    api.setUiScale(state.config.settings.uiScale);
+    closeModal({ skipCleanup: true });
     renderAll();
     try {
       await persistConfig();
       toast('Settings saved.', 'success');
     } catch (error) {
+      api.setUiScale(state.config.settings.uiScale || originalScale);
+      applyTheme(state.config.settings.theme || originalTheme);
       toast(error.message, 'error');
     }
   });
@@ -1371,6 +1427,7 @@ async function initialize() {
     const initial = await api.getState();
     Object.assign(state, initial);
     api.setUiScale(initial.config.settings.uiScale || 100);
+    applyTheme(initial.config.settings.theme);
     document.documentElement.classList.add(`platform-${state.platform}`);
     state.logs = initial.logs || [];
     for (const status of pendingStatuses) state.statuses[status.routeId] = status;

@@ -8,11 +8,11 @@ const outputDirectory = path.resolve(process.argv[2] || path.join(process.cwd(),
 
 const demoConfig = {
   version: 1,
-  settings: { closeToTray: true, startWithSystem: false, launchHidden: false, uiScale: 100 },
+  settings: { closeToTray: true, startWithSystem: false, launchHidden: false, uiScale: 100, uiScaleVersion: 2, theme: 'dark' },
   localNode: { id: 'local', name: 'Development Laptop', position: { x: 100, y: 260 } },
   servers: [
     { id: 'gpu', name: 'GPU Server', host: '10.10.0.21', port: 22, username: 'ubuntu', authMode: 'agent', keyPath: '', hostFingerprint: 'demo', position: { x: 500, y: 120 } },
-    { id: 'private', name: 'Private Network Gateway', host: 'bastion.internal', port: 22, username: 'dev', authMode: 'agent', keyPath: '', hostFingerprint: 'demo', position: { x: 500, y: 410 } },
+    { id: 'private', name: 'Private Network Gateway', host: 'bastion.internal', port: 22, username: 'dev', authMode: 'password', keyPath: '', hostFingerprint: 'demo', position: { x: 500, y: 410 } },
     { id: 'lab', name: 'Offline Research Server', host: '172.16.20.8', port: 2222, username: 'research', authMode: 'agent', keyPath: '', hostFingerprint: 'demo', position: { x: 900, y: 260 } },
   ],
   routes: [
@@ -37,7 +37,7 @@ function response(value) {
 function registerMockIpc() {
   ipcMain.handle('state:get', () => response({
     config: demoConfig,
-    secrets: { gpu: {}, private: {}, lab: {} },
+    secrets: { gpu: {}, private: { hasPassword: true, hasPassphrase: false }, lab: {} },
     encryption: { available: true, backend: 'dpapi', warning: null },
     statuses: demoStatuses,
     logs: [
@@ -52,10 +52,10 @@ function registerMockIpc() {
     if (configSaveCount === 1) await new Promise((resolve) => setTimeout(resolve, 250));
     return response({
       config: payload.config,
-      secrets: { gpu: {}, private: {}, lab: {} },
+      secrets: { gpu: {}, private: { hasPassword: true, hasPassphrase: false }, lab: {} },
     });
   });
-  for (const channel of ['server:probe-key', 'server:test', 'route:start', 'route:stop', 'route:start-all', 'route:stop-all', 'window:show', 'app:quit', 'dialog:select-key']) {
+  for (const channel of ['server:probe-key', 'server:test', 'route:start', 'route:stop', 'route:start-all', 'route:stop-all', 'window:set-theme', 'window:show', 'app:quit', 'dialog:select-key']) {
     ipcMain.handle(channel, () => response(null));
   }
   ipcMain.handle('ssh-keys:list', () => response([
@@ -128,11 +128,30 @@ async function run() {
     nodes: document.querySelectorAll('.node-card').length,
     portHandles: document.querySelectorAll('.port-handle').length,
     edges: document.querySelectorAll('.edge-group').length,
+    securityBadges: document.querySelectorAll('#security-badge').length,
     title: document.querySelector('.brand strong')?.textContent
   })`);
   if (!ready.ready || ready.nodes !== 4 || ready.portHandles !== 0 || ready.edges !== 3
+    || ready.securityBadges !== 0
     || ready.title !== 'PortPatch') {
     throw new Error(`Render validation failed: ${JSON.stringify(ready)}`);
+  }
+  const connectingArrow = await window.webContents.executeJavaScript(`(() => {
+    const edge = document.querySelector('[data-edge-id="internet"] .route-edge');
+    const arrow = document.querySelector('#arrow-connecting path');
+    return {
+      marker: getComputedStyle(edge).markerEnd,
+      edgeColor: getComputedStyle(edge).stroke,
+      arrowColor: getComputedStyle(arrow).fill,
+      edgeAnimation: getComputedStyle(edge).animationName,
+      arrowAnimation: getComputedStyle(arrow).animationName
+    };
+  })()`);
+  if (!connectingArrow.marker.includes('arrow-connecting')
+    || connectingArrow.edgeColor !== connectingArrow.arrowColor
+    || connectingArrow.edgeAnimation !== 'connecting-pulse'
+    || connectingArrow.arrowAnimation !== 'none') {
+    throw new Error(`Connecting arrow validation failed: ${JSON.stringify(connectingArrow)}`);
   }
   await capture(window, '01-graph.png');
 
@@ -201,12 +220,16 @@ async function run() {
     const result = {
       level: document.querySelector('#zoom-level').textContent,
       transform: document.querySelector('#graph-canvas').style.transform,
-      worldWidth: parseFloat(document.querySelector('#graph-world').style.width)
+      worldWidth: parseFloat(document.querySelector('#graph-world').style.width),
+      worldHeight: parseFloat(document.querySelector('#graph-world').style.height)
     };
     document.querySelector('#zoom-reset').click();
     return result;
   })()`);
-  if (zoomedCanvas.level === '100%' || !zoomedCanvas.transform.startsWith('scale(') || zoomedCanvas.worldWidth <= 1800) {
+  if (zoomedCanvas.level === '100%'
+    || !zoomedCanvas.transform.startsWith('scale(')
+    || zoomedCanvas.worldWidth <= 1200
+    || zoomedCanvas.worldWidth !== zoomedCanvas.worldHeight) {
     throw new Error(`Canvas zoom validation failed: ${JSON.stringify(zoomedCanvas)}`);
   }
 
@@ -374,6 +397,30 @@ async function run() {
   }
   await capture(window, '04-server-modal.png');
 
+  await executeChecked(window, 'open server with a saved password', `(() => {
+    document.querySelector('[data-close-modal]').click();
+    window.openServerModal('private');
+    return true;
+  })()`);
+  const savedPassword = await window.webContents.executeJavaScript(`({
+    authMode: document.querySelector('#server-auth')?.value,
+    fieldHidden: document.querySelector('#password-field')?.classList.contains('is-hidden'),
+    value: document.querySelector('#server-password')?.value,
+    placeholder: document.querySelector('#server-password')?.placeholder,
+    state: document.querySelector('.credential-state')?.textContent,
+    storage: document.querySelector('.credential-storage-note')?.textContent
+  })`);
+  if (savedPassword.authMode !== 'password'
+    || savedPassword.fieldHidden
+    || savedPassword.value !== ''
+    || savedPassword.placeholder !== 'Leave blank to keep the saved password'
+    || savedPassword.state !== 'Saved securely'
+    || !savedPassword.storage.includes('Windows DPAPI')
+    || !savedPassword.storage.includes('secrets.json')) {
+    throw new Error(`Saved password presentation validation failed: ${JSON.stringify(savedPassword)}`);
+  }
+  await capture(window, '05-password-server-modal.png');
+
   await executeChecked(window, 'open help modal', `(() => {
     document.querySelector('[data-close-modal]').click();
     document.querySelector('#help-button').click();
@@ -383,13 +430,15 @@ async function run() {
     title: document.querySelector('#modal-title')?.textContent,
     items: document.querySelectorAll('.help-item').length,
     includesConnect: document.querySelector('#modal')?.textContent.includes('Ctrl + drag'),
-    includesZoom: document.querySelector('#modal')?.textContent.includes('Mouse wheel')
+    includesZoom: document.querySelector('#modal')?.textContent.includes('Mouse wheel'),
+    descriptionFontSize: parseFloat(getComputedStyle(document.querySelector('.help-item span')).fontSize)
   })`);
   if (helpModal.title !== 'Using the routing map' || helpModal.items !== 6
-    || !helpModal.includesConnect || !helpModal.includesZoom) {
+    || !helpModal.includesConnect || !helpModal.includesZoom
+    || helpModal.descriptionFontSize < 11) {
     throw new Error(`Help modal validation failed: ${JSON.stringify(helpModal)}`);
   }
-  await capture(window, '05-help-modal.png');
+  await capture(window, '06-help-modal.png');
 
   await executeChecked(window, 'open application settings', `(() => {
     document.querySelector('[data-close-modal]').click();
@@ -403,7 +452,8 @@ async function run() {
     routeStartupControls: document.querySelectorAll('#edge-route-autostart').length,
     routeBehaviorNote: document.querySelector('#modal')?.textContent.includes('Port routes remain stopped until you select Start route or Start all.'),
     hiddenLaunchDisabled: document.querySelector('#launch-hidden')?.disabled,
-    interfaceSize: document.querySelector('#ui-scale')?.value
+    interfaceSize: document.querySelector('#ui-scale')?.value,
+    theme: document.querySelector('#ui-theme')?.value
   })`);
   if (startupSettings.title !== 'Application settings'
     || startupSettings.windowsStartupControls !== 1
@@ -411,18 +461,47 @@ async function run() {
     || startupSettings.routeStartupControls !== 0
     || !startupSettings.routeBehaviorNote
     || !startupSettings.hiddenLaunchDisabled
-    || startupSettings.interfaceSize !== '100') {
+    || startupSettings.interfaceSize !== '100'
+    || startupSettings.theme !== 'dark') {
     throw new Error(`Windows startup settings validation failed: ${JSON.stringify(startupSettings)}`);
   }
-  await capture(window, '06-settings-modal.png');
-  await executeChecked(window, 'save a compact interface size', `(() => {
+  await capture(window, '07-settings-modal.png');
+  await executeChecked(window, 'preview and cancel a compact interface size', `(() => {
     document.querySelector('#ui-scale').value = '90';
+    document.querySelector('#ui-scale').dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelector('#ui-theme').value = 'light';
+    document.querySelector('#ui-theme').dispatchEvent(new Event('change', { bubbles: true }));
+    return window.sshRouter.getUiScale();
+  })()`);
+  const previewScale = await window.webContents.executeJavaScript(`window.sshRouter.getUiScale()`);
+  if (previewScale !== 90) throw new Error(`Interface scale preview was not applied: ${previewScale}`);
+  const previewTheme = await window.webContents.executeJavaScript(`document.documentElement.dataset.theme`);
+  if (previewTheme !== 'light') throw new Error(`Interface theme preview was not applied: ${previewTheme}`);
+  await capture(window, '08-light-theme-preview.png');
+  await executeChecked(window, 'cancel the interface size preview', `(() => {
+    [...document.querySelectorAll('[data-close-modal]')].find((element) => element.textContent === 'Cancel').click();
+    return true;
+  })()`);
+  const restoredScale = await window.webContents.executeJavaScript(`window.sshRouter.getUiScale()`);
+  if (restoredScale !== 100) throw new Error(`Cancelled interface scale was not restored: ${restoredScale}`);
+  const restoredTheme = await window.webContents.executeJavaScript(`document.documentElement.dataset.theme`);
+  if (restoredTheme !== 'dark') throw new Error(`Cancelled interface theme was not restored: ${restoredTheme}`);
+
+  await executeChecked(window, 'save a compact interface size', `(() => {
+    document.querySelector('#settings-button').click();
+    document.querySelector('#ui-scale').value = '90';
+    document.querySelector('#ui-scale').dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelector('#ui-theme').value = 'light';
+    document.querySelector('#ui-theme').dispatchEvent(new Event('change', { bubbles: true }));
     document.querySelector('#save-settings').click();
     return true;
   })()`);
   await new Promise((resolve) => setTimeout(resolve, 150));
   const appliedScale = await window.webContents.executeJavaScript(`window.sshRouter.getUiScale()`);
   if (appliedScale !== 90) throw new Error(`Interface scale was not applied: ${appliedScale}`);
+  const appliedTheme = await window.webContents.executeJavaScript(`document.documentElement.dataset.theme`);
+  if (appliedTheme !== 'light') throw new Error(`Interface theme was not applied: ${appliedTheme}`);
+  await capture(window, '09-light-theme-graph.png');
 
   if (errors.length) throw new Error(`Renderer console errors: ${errors.join(' | ')}`);
   window.destroy();
