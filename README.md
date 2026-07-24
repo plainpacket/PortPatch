@@ -2,7 +2,7 @@
 
 PortPatch is a portable desktop application that represents your computer and SSH servers as nodes. Draw a directed edge from the place that accepts a connection to the place that should receive the traffic. Closing the window keeps active routes running in the system tray.
 
-Current version: `0.2.0` - Windows MVP - MIT License
+Current version: `0.3.0` - Windows MVP - MIT License
 
 ## Features
 

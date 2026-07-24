@@ -45,7 +45,7 @@ function registerMockIpc() {
       { id: '2', timestamp: new Date().toISOString(), level: 'warn', message: 'Research server SSH disconnected', details: { serverId: 'lab' } },
     ],
     platform: 'win32',
-    version: '0.2.0-test',
+    version: '0.3.0-test',
   }));
   ipcMain.handle('config:save', async (_event, payload) => {
     configSaveCount += 1;
