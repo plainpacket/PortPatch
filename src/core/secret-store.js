@@ -34,7 +34,7 @@ class SecretStore {
       available: Boolean(asyncAvailable || syncAvailable),
       backend,
       warning: backend === 'basic_text'
-        ? 'No Linux secure-storage backend was found. Secrets are not strongly protected.'
+        ? 'No Linux secure-storage backend was found, so passwords and key passphrases are not strongly protected. Install and run gnome-keyring (or KWallet on KDE) to enable encryption: on Debian/Ubuntu, run "sudo apt install gnome-keyring"; on Fedora, run "sudo dnf install gnome-keyring". Then sign out and back in.'
         : null,
     };
   }

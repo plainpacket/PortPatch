@@ -37,6 +37,7 @@ flowchart TD
 - `src/core/connection-manager.js`: SSH authentication, host-key verification, connection reuse, and remote listen/dial operations
 - `src/core/relay-engine.js`: route lifecycle, any-to-any stream relay, statistics, and automatic reconnection
 - `src/core/socks5.js`: unauthenticated SOCKS5 CONNECT parser
+- `src/core/linux-autostart.js`: creates and removes the XDG autostart desktop entry used for launch-at-sign-in on Linux
 - `src/main.js`: tray, single-instance handling, IPC, sign-in launch, and storage
 - `src/renderer/`: sandboxed renderer and node-graph interface
 
@@ -46,13 +47,17 @@ flowchart TD
 - The preload exposes only required IPC operations and no arbitrary shell execution.
 - SSH connections use the `ssh2` library instead of external commands or `sshpass`.
 - The first connection probe sends no credentials and retrieves only the SHA-256 host-key fingerprint. Authentication occurs in a separate connection after the user verifies it. Later connections must match the pinned value exactly.
-- On Windows, Electron `safeStorage` protects passwords and key passphrases with DPAPI.
+- Electron `safeStorage` protects passwords and key passphrases with the operating system's native credential store: DPAPI on Windows, Keychain on macOS, and the Secret Service API (GNOME Keyring or KWallet) on Linux. PortPatch does not implement its own encryption or fall back to a bundled key; if no OS-backed store is available it relies on Electron's `basic_text` fallback and surfaces a warning instead of silently treating that as secure.
 - Secret records are bound to the server address, port, user, authentication mode, and host-key signature. Configuration and secret files are replaced atomically after their temporary files are synchronized.
 - Passwords, passphrases, and private-key fields are removed from logs.
 - Listeners bind to loopback by default.
 - Non-loopback local listeners and all remote-node listeners require explicit `allowExternal` consent. This is necessary because an SSH server with `GatewayPorts yes` may turn a requested loopback listener into a wildcard listener. The UI adds another warning for unauthenticated SOCKS5 listeners.
 
-On Linux, secure storage depends on the desktop environment's Secret Service or KWallet support. The UI warns when Electron reports the insecure `basic_text` backend.
+On Linux, secure storage depends on the desktop environment's Secret Service or KWallet support. PortPatch does not force a specific backend; it lets Electron/Chromium's own `os_crypt` detection choose between GNOME Keyring (libsecret), KWallet, or the `basic_text` fallback, since that detection already probes for a running Secret Service or KWallet daemon and forcing a backend risks selecting one that is not actually available. GNOME Keyring is the most commonly preinstalled option on mainstream desktop distributions (it ships as a dependency of the GNOME session and unlocks automatically via PAM at login), so most users need no extra setup. The UI warns when Electron reports the insecure `basic_text` backend and suggests installing `gnome-keyring` (or KWallet on KDE).
+
+## Linux autostart
+
+Electron's `app.setLoginItemSettings` API only supports Windows and macOS. On Linux, `applyLoginSetting` in `src/main.js` instead calls `setLinuxAutostart` (`src/core/linux-autostart.js`), which writes or removes a `Type=Application` desktop entry at `~/.config/autostart/io.github.plainpacket.portpatch.desktop` per the [XDG Desktop Entry Specification](https://specifications.freedesktop.org/desktop-entry-spec/latest/). The entry's `Exec` value is quoted according to that specification's own tokenizer rules; it is never passed through a shell, so there is no shell-injection surface even for executable paths containing spaces or special characters. The file is written atomically and enabling/disabling autostart is driven by the same `startWithSystem`/`launchHidden` settings used on Windows, so the renderer needs no platform-specific logic beyond removing the Windows-only disabled state.
 
 ## Reconnection
 
