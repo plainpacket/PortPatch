@@ -456,8 +456,8 @@ async function run() {
   })()`);
   const startupSettings = await window.webContents.executeJavaScript(`({
     title: document.querySelector('#modal-title')?.textContent,
-    windowsStartupControls: document.querySelectorAll('#start-with-system').length,
-    windowsStartupLabel: document.querySelector('label[for="start-with-system"]')?.textContent,
+    startupControls: document.querySelectorAll('#start-with-system').length,
+    startupLabel: document.querySelector('label[for="start-with-system"]')?.textContent,
     routeStartupControls: document.querySelectorAll('#edge-route-autostart').length,
     routeBehaviorNote: document.querySelector('#modal')?.textContent.includes('Port routes remain stopped until you select Start route or Start all.'),
     hiddenLaunchDisabled: document.querySelector('#launch-hidden')?.disabled,
@@ -465,14 +465,14 @@ async function run() {
     theme: document.querySelector('#ui-theme')?.value
   })`);
   if (startupSettings.title !== 'Application settings'
-    || startupSettings.windowsStartupControls !== 1
-    || startupSettings.windowsStartupLabel !== 'Launch PortPatch when I sign in to Windows'
+    || startupSettings.startupControls !== 1
+    || startupSettings.startupLabel !== 'Launch PortPatch when I sign in'
     || startupSettings.routeStartupControls !== 0
     || !startupSettings.routeBehaviorNote
     || !startupSettings.hiddenLaunchDisabled
     || startupSettings.interfaceSize !== '100'
     || startupSettings.theme !== 'dark') {
-    throw new Error(`Windows startup settings validation failed: ${JSON.stringify(startupSettings)}`);
+    throw new Error(`Startup settings validation failed: ${JSON.stringify(startupSettings)}`);
   }
   await capture(window, '07-settings-modal.png');
   await executeChecked(window, 'preview and cancel a compact interface size', `(() => {
