@@ -3,6 +3,7 @@
   "version": "0.3.0",
   "description": "Visual any-to-any SSH port routing for Windows and Linux",
   "main": "src/main.js",
+  "desktopName": "io.github.plainpacket.portpatch.desktop",
   "author": "PortPatch contributors",
   "license": "MIT",
   "private": true,
@@ -50,7 +51,8 @@
         "AppImage"
       ],
       "category": "Network",
-      "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
+      "artifactName": "${productName}-${version}-linux-${arch}.${ext}",
+      "syncDesktopName": true
     }
   }
 }
