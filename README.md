@@ -36,7 +36,7 @@ PortPatch is distributed without an installer.
 - No administrator access is required for normal use
 - Application settings and encrypted credentials remain in the operating system's per-user application-data directory. They are not written beside the executable. This keeps the executable movable and allows it to run from read-only locations.
 
-The Windows executable is currently the only tested distribution. Linux packaging is configured and Linux-specific code paths (autostart, secret storage) are implemented, but the AppImage build has not yet been verified on real Linux hardware, so Linux releases are not published yet.
+The Windows executable is the only published distribution. The Linux AppImage builds and has been smoke-tested on a real Ubuntu/GNOME desktop (see [architecture.md](docs/architecture.md)), but it has not gone through a full release QA pass across distributions, so Linux releases are not published yet.
 
 ### Download for Windows
 
@@ -120,5 +120,6 @@ When the source is remote, PortPatch uses SSH `forwardIn`. When the target is re
 - PortPatch relays both SSH streams for remote-to-remote routes, so the application must remain running.
 - SOCKS5 is a per-application proxy, not a VPN or transparent TUN interface for all server traffic.
 - Windows executables are not yet signed with a commercial Authenticode certificate and may trigger a reputation warning.
-- Linux code paths (autostart, secret storage) and AppImage packaging are implemented but have not been release-tested on real hardware, including system tray behavior on desktop environments without an AppIndicator extension (for example, unmodified GNOME).
+- The Linux AppImage builds and runs, but has not been release-tested across the full range of distributions and window managers; see [architecture.md](docs/architecture.md) for confirmed findings on sandboxing and tray behavior.
+- On GNOME, the system tray icon requires the "AppIndicator and KStatusNotifierItem Support" extension. It ships pre-installed on Ubuntu but is not enabled by default in every session, and is not installed at all on stock Fedora Workstation; without it, the tray icon is silently never shown. Use the topbar Quit button (or the tray menu, if visible) to fully close PortPatch either way.
 - If no Linux secret-storage backend (GNOME Keyring/libsecret or KWallet) is available, PortPatch still allows saving passwords and key passphrases but warns that they are not strongly protected. Install `gnome-keyring` (or KWallet on KDE) for encrypted storage.
