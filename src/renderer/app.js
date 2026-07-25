@@ -216,7 +216,14 @@ function renderSecurityBadge() {
     badge.title = state.encryption.warning || 'Operating-system encryption is unavailable.';
   } else {
     badge.classList.remove('warning');
-    const names = { dpapi: 'Windows DPAPI', keychain: 'macOS Keychain' };
+    const names = {
+      dpapi: 'Windows DPAPI',
+      keychain: 'macOS Keychain',
+      gnome_libsecret: 'GNOME Keyring (libsecret)',
+      kwallet: 'KWallet',
+      kwallet5: 'KWallet',
+      kwallet6: 'KWallet',
+    };
     badge.textContent = `Credentials protected - ${names[state.encryption.backend] || state.encryption.backend}`;
     badge.title = 'Passwords and key passphrases are encrypted by the operating system.';
   }
@@ -766,6 +773,9 @@ function credentialStorageNote() {
   if (state.encryption?.backend === 'keychain') {
     return 'Encrypted with the system keychain and stored in PortPatch per-user app data as secrets.json.';
   }
+  if (['gnome_libsecret', 'kwallet', 'kwallet5', 'kwallet6'].includes(state.encryption?.backend)) {
+    return 'Encrypted with your Linux secret service (GNOME Keyring or KWallet) and stored in PortPatch per-user app data as secrets.json.';
+  }
   return 'Stored in PortPatch per-user app data as secrets.json using the secure storage available on this system.';
 }
 
@@ -802,7 +812,7 @@ function serverFormTemplate(server, existing, metadata) {
           <input id="server-password" type="password" autocomplete="new-password" placeholder="${metadata.hasPassword ? 'Leave blank to keep the saved password' : 'Enter password'}">
           <span class="credential-storage-note">${metadata.hasPassword ? 'A password is already saved. Leave this field blank to keep it. ' : ''}${escapeHtml(credentialStorageNote())}</span>
         </div>
-        <div id="agent-notice" class="notice info">Uses a key already unlocked in Windows OpenSSH Agent or Pageant. PortPatch does not read a private key file or store a passphrase in this mode.</div>
+        <div id="agent-notice" class="notice info">Uses a key already unlocked in a running SSH agent (Windows OpenSSH Agent or Pageant on Windows, ssh-agent via SSH_AUTH_SOCK on Linux). PortPatch does not read a private key file or store a passphrase in this mode.</div>
         <div class="form-divider"></div>
         <div class="form-field full"><label for="server-fingerprint">Trusted host-key fingerprint - SHA-256</label><input id="server-fingerprint" value="${escapeHtml(server.hostFingerprint)}" readonly placeholder="Shown after a connection test"><span class="form-help">Verify it again if the server address or key changes.</span></div>
         <div id="test-result" class="is-hidden"></div>
@@ -1261,9 +1271,8 @@ function settingsTemplate() {
         </select><span class="form-help">Previewed immediately and saved for the next launch.</span></div>
         <div class="form-divider"></div>
         <div class="checkbox-field full"><input id="close-to-tray" type="checkbox" ${settings.closeToTray ? 'checked' : ''}><label for="close-to-tray">Hide in the system tray instead of quitting when the window closes</label></div>
-        <div class="section-label">WINDOWS STARTUP</div>
-        <div class="checkbox-field full"><input id="start-with-system" type="checkbox" ${settings.startWithSystem ? 'checked' : ''} ${state.platform === 'linux' ? 'disabled' : ''}><label for="start-with-system">Launch PortPatch when I sign in to Windows</label></div>
-        ${state.platform === 'linux' ? '<div class="notice">Linux autostart integration is planned for a later release.</div>' : ''}
+        <div class="section-label">STARTUP</div>
+        <div class="checkbox-field full"><input id="start-with-system" type="checkbox" ${settings.startWithSystem ? 'checked' : ''}><label for="start-with-system">Launch PortPatch when I sign in</label></div>
         <div class="checkbox-field full"><input id="launch-hidden" type="checkbox" ${settings.launchHidden ? 'checked' : ''} ${settings.startWithSystem ? '' : 'disabled'}><label for="launch-hidden">Open in the tray when launched at sign-in</label></div>
         <span class="form-help full">Port routes remain stopped until you select Start route or Start all.</span>
         ${state.encryption?.warning ? `<div class="notice">${escapeHtml(state.encryption.warning)}</div>` : ''}
@@ -1279,17 +1288,17 @@ function openSettingsModal() {
     api.setUiScale(originalScale);
     applyTheme(originalTheme);
   });
-  const updateWindowsStartupFields = () => {
-    const enabled = $('#start-with-system').checked && state.platform !== 'linux';
+  const updateStartupFields = () => {
+    const enabled = $('#start-with-system').checked;
     $('#launch-hidden').disabled = !enabled;
     if (!enabled) $('#launch-hidden').checked = false;
   };
-  $('#start-with-system').addEventListener('change', updateWindowsStartupFields);
+  $('#start-with-system').addEventListener('change', updateStartupFields);
   $('#ui-scale').addEventListener('change', () => {
     api.setUiScale(Number($('#ui-scale').value));
   });
   $('#ui-theme').addEventListener('change', () => applyTheme($('#ui-theme').value));
-  updateWindowsStartupFields();
+  updateStartupFields();
   $('#save-settings').addEventListener('click', async () => {
     const name = $('#local-name').value.trim();
     if (!name) return toast('Enter a name for the local computer node.', 'error');
