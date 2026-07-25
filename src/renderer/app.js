@@ -1254,7 +1254,7 @@ function settingsTemplate() {
   const uiScale = Number(settings.uiScale || 100);
   const theme = settings.theme === 'light' ? 'light' : 'dark';
   return `
-    <div class="modal-header"><div><h2 id="modal-title">Application settings</h2><p>Configure Windows startup, tray behavior, and the local node name.</p></div><button class="icon-button small" data-close-modal type="button">x</button></div>
+    <div class="modal-header"><div><h2 id="modal-title">Application settings</h2><p>Configure startup, tray behavior, and the local node name.</p></div><button class="icon-button small" data-close-modal type="button">x</button></div>
     <div class="modal-body">
       <form class="form-grid">
         <div class="form-field full"><label for="local-name">Local computer node name</label><input id="local-name" value="${escapeHtml(state.config.localNode.name)}"></div>
@@ -1380,6 +1380,9 @@ function bindStaticEvents() {
   $('#empty-add-server').addEventListener('click', () => openServerModal());
   $('#settings-button').addEventListener('click', openSettingsModal);
   $('#help-button').addEventListener('click', openHelpModal);
+  $('#quit-button').addEventListener('click', () => {
+    if (window.confirm('Quit PortPatch? Active routes will stop.')) api.quit();
+  });
   $('#start-all-button').addEventListener('click', async () => {
     try { await api.startAll(); } catch (error) { toast(error.message, 'error'); }
   });
