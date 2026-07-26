@@ -75,6 +75,17 @@ test('XDG_CONFIG_HOME overrides the default ~/.config location', () => {
   );
 });
 
+test('a relative XDG_CONFIG_HOME is treated as invalid per the XDG Base Directory Specification', () => {
+  assert.equal(
+    autostartDirectory('/home/alice', { env: { XDG_CONFIG_HOME: 'relative/config' } }),
+    path.join('/home/alice', '.config', 'autostart'),
+  );
+  assert.equal(
+    autostartDirectory('/home/alice', { env: { XDG_CONFIG_HOME: '~/config' } }),
+    path.join('/home/alice', '.config', 'autostart'),
+  );
+});
+
 test('resolveLinuxExecutablePath prefers the AppImage runtime path over process.execPath', () => {
   assert.equal(
     resolveLinuxExecutablePath({
@@ -109,4 +120,15 @@ test('the built entry never embeds unescaped double quotes from a quoted argumen
   const entry = buildDesktopEntry('/opt/say "hi"/portpatch');
   const execLine = entry.split('\n').find((line) => line.startsWith('Exec='));
   assert.equal(execLine, 'Exec="/opt/say \\"hi\\"/portpatch"');
+});
+
+test('a literal percent sign is escaped so it cannot be read as a field code', () => {
+  assert.equal(
+    buildExecLine('/home/user/100%free/PortPatch.AppImage'),
+    '/home/user/100%%free/PortPatch.AppImage',
+  );
+  assert.equal(
+    buildExecLine('/home/user/100% free/PortPatch.AppImage'),
+    '"/home/user/100%% free/PortPatch.AppImage"',
+  );
 });

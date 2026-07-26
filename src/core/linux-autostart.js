@@ -7,9 +7,12 @@ const { atomicWriteFile } = require('./atomic-file');
 const DESKTOP_FILE_NAME = 'io.github.plainpacket.portpatch.desktop';
 const NEEDS_QUOTING = /[\s"'\\><~|&;$*?#()`]/;
 
+// The XDG Base Directory Specification requires these paths to be absolute and
+// says a relative value should be treated as invalid, i.e. ignored like unset.
 function autostartDirectory(homeDirectory, options = {}) {
   const environment = options.env || process.env;
-  const configHome = environment.XDG_CONFIG_HOME || path.join(homeDirectory, '.config');
+  const xdgConfigHome = environment.XDG_CONFIG_HOME;
+  const configHome = xdgConfigHome && path.isAbsolute(xdgConfigHome) ? xdgConfigHome : path.join(homeDirectory, '.config');
   return path.join(configHome, 'autostart');
 }
 
@@ -29,8 +32,11 @@ function resolveLinuxExecutablePath(options = {}) {
 
 // Desktop Entry Spec quoting: values run through the launcher's own tokenizer,
 // never a shell, so this only has to satisfy that spec, not prevent shell injection.
+// Separately, a literal "%" must always become "%%" -- otherwise a path like
+// .../100%free/... would have "%f" read as a field code substitution, regardless
+// of whether the surrounding value ends up quoted.
 function quoteExecArgument(value) {
-  const text = String(value);
+  const text = String(value).replace(/%/g, '%%');
   if (!NEEDS_QUOTING.test(text)) return text;
   const escaped = text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/`/g, '\\`').replace(/\$/g, '\\$');
   return `"${escaped}"`;
