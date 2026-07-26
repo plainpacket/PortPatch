@@ -6,11 +6,30 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  check-version:
+    name: Verify tag matches package.json version
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Compare tag to package.json
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          package_version=$(node -p "require('./package.json').version")
+          if [ "$tag_version" != "$package_version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $package_version." >&2
+            exit 1
+          fi
+
   windows-build:
     name: Build Windows portable executable
+    needs: check-version
     runs-on: windows-latest
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
@@ -60,6 +79,7 @@ jobs:
 
   linux-build:
     name: Build Linux AppImage
+    needs: check-version
     runs-on: ubuntu-latest
 
     steps:
@@ -109,6 +129,8 @@ jobs:
     name: Publish GitHub Release
     needs: [windows-build, linux-build]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Download Windows build
@@ -136,12 +158,11 @@ jobs:
           fi
 
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" \
-              --repo "$GITHUB_REPOSITORY" \
-              --clobber
-          else
-            gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "PortPatch $GITHUB_REF_NAME" \
-              --generate-notes
+            echo "A release for $GITHUB_REF_NAME already exists. This workflow does not overwrite an existing release -- delete it first if you intend to replace it, so a partial or mismatched set of old assets can never linger alongside the new ones." >&2
+            exit 1
           fi
+
+          gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "PortPatch $GITHUB_REF_NAME" \
+            --generate-notes
