@@ -1,6 +1,6 @@
 {
   "name": "portpatch",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Visual any-to-any SSH port routing for Windows and Linux",
   "main": "src/main.js",
   "desktopName": "io.github.plainpacket.portpatch.desktop",
