@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  windows-portable:
+  windows-build:
     name: Build Windows portable executable
     runs-on: windows-latest
     env:
@@ -49,31 +49,16 @@ jobs:
           $hash = (Get-FileHash $asset.FullName -Algorithm SHA256).Hash.ToLower()
           Set-Content -Path "$($asset.FullName).sha256" -Value "$hash  $($asset.Name)" -NoNewline
 
-      - name: Publish GitHub Release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $asset = Get-ChildItem release -Filter "*-portable.exe" | Select-Object -First 1
-          if (-not $asset) {
-            throw "Portable executable was not generated."
-          }
-          $checksum = "$($asset.FullName).sha256"
-          $releaseExists = gh release view $env:GITHUB_REF_NAME `
-            --repo $env:GITHUB_REPOSITORY 2>$null
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-portable
+          path: |
+            release/*-portable.exe
+            release/*-portable.exe.sha256
+          if-no-files-found: error
 
-          if ($LASTEXITCODE -eq 0) {
-            gh release upload $env:GITHUB_REF_NAME $asset.FullName $checksum `
-              --repo $env:GITHUB_REPOSITORY `
-              --clobber
-          } else {
-            gh release create $env:GITHUB_REF_NAME $asset.FullName $checksum `
-              --repo $env:GITHUB_REPOSITORY `
-              --title "PortPatch $env:GITHUB_REF_NAME" `
-              --generate-notes
-          }
-
-  linux-appimage:
+  linux-build:
     name: Build Linux AppImage
     runs-on: ubuntu-latest
 
@@ -111,24 +96,51 @@ jobs:
           fi
           (cd "$(dirname "$asset")" && sha256sum "$(basename "$asset")") > "$asset.sha256"
 
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: |
+            release/*.AppImage
+            release/*.AppImage.sha256
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: [windows-build, linux-build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Windows build
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-portable
+          path: release
+
+      - name: Download Linux build
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-appimage
+          path: release
+
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          asset=$(find release -maxdepth 1 -name "*.AppImage" | head -n 1)
-          if [ -z "$asset" ]; then
-            echo "AppImage was not generated." >&2
+          assets=(release/*)
+          if [ "${#assets[@]}" -ne 4 ]; then
+            echo "Expected 4 release assets (exe, AppImage, and a .sha256 for each), found ${#assets[@]}:" >&2
+            printf '  %s\n' "${assets[@]}" >&2
             exit 1
           fi
-          checksum="$asset.sha256"
 
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "$asset" "$checksum" \
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" \
               --repo "$GITHUB_REPOSITORY" \
               --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "$asset" "$checksum" \
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
               --repo "$GITHUB_REPOSITORY" \
               --title "PortPatch $GITHUB_REF_NAME" \
               --generate-notes
