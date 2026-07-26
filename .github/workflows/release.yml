@@ -39,6 +39,16 @@ jobs:
       - name: Build portable executable
         run: pnpm dist:win
 
+      - name: Compute checksum
+        shell: pwsh
+        run: |
+          $asset = Get-ChildItem release -Filter "*-portable.exe" | Select-Object -First 1
+          if (-not $asset) {
+            throw "Portable executable was not generated."
+          }
+          $hash = (Get-FileHash $asset.FullName -Algorithm SHA256).Hash.ToLower()
+          Set-Content -Path "$($asset.FullName).sha256" -Value "$hash  $($asset.Name)" -NoNewline
+
       - name: Publish GitHub Release
         shell: pwsh
         env:
@@ -48,16 +58,78 @@ jobs:
           if (-not $asset) {
             throw "Portable executable was not generated."
           }
+          $checksum = "$($asset.FullName).sha256"
           $releaseExists = gh release view $env:GITHUB_REF_NAME `
             --repo $env:GITHUB_REPOSITORY 2>$null
 
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $env:GITHUB_REF_NAME $asset.FullName `
+            gh release upload $env:GITHUB_REF_NAME $asset.FullName $checksum `
               --repo $env:GITHUB_REPOSITORY `
               --clobber
           } else {
-            gh release create $env:GITHUB_REF_NAME $asset.FullName `
+            gh release create $env:GITHUB_REF_NAME $asset.FullName $checksum `
               --repo $env:GITHUB_REPOSITORY `
               --title "PortPatch $env:GITHUB_REF_NAME" `
               --generate-notes
           }
+
+  linux-appimage:
+    name: Build Linux AppImage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Build AppImage
+        run: pnpm dist:linux
+
+      - name: Compute checksum
+        run: |
+          set -euo pipefail
+          asset=$(find release -maxdepth 1 -name "*.AppImage" | head -n 1)
+          if [ -z "$asset" ]; then
+            echo "AppImage was not generated." >&2
+            exit 1
+          fi
+          (cd "$(dirname "$asset")" && sha256sum "$(basename "$asset")") > "$asset.sha256"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          asset=$(find release -maxdepth 1 -name "*.AppImage" | head -n 1)
+          if [ -z "$asset" ]; then
+            echo "AppImage was not generated." >&2
+            exit 1
+          fi
+          checksum="$asset.sha256"
+
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$asset" "$checksum" \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$asset" "$checksum" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "PortPatch $GITHUB_REF_NAME" \
+              --generate-notes
+          fi
