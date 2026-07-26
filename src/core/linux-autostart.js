@@ -7,12 +7,24 @@ const { atomicWriteFile } = require('./atomic-file');
 const DESKTOP_FILE_NAME = 'io.github.plainpacket.portpatch.desktop';
 const NEEDS_QUOTING = /[\s"'\\><~|&;$*?#()`]/;
 
-function autostartDirectory(homeDirectory) {
-  return path.join(homeDirectory, '.config', 'autostart');
+function autostartDirectory(homeDirectory, options = {}) {
+  const environment = options.env || process.env;
+  const configHome = environment.XDG_CONFIG_HOME || path.join(homeDirectory, '.config');
+  return path.join(configHome, 'autostart');
 }
 
-function desktopFilePath(homeDirectory) {
-  return path.join(autostartDirectory(homeDirectory), DESKTOP_FILE_NAME);
+function desktopFilePath(homeDirectory, options = {}) {
+  return path.join(autostartDirectory(homeDirectory, options), DESKTOP_FILE_NAME);
+}
+
+// The AppImage runtime sets APPIMAGE to the original file's stable path before
+// exec'ing the wrapped binary. process.execPath instead resolves to a path under
+// a per-launch /tmp/.mount_* FUSE mount that stops existing once the app exits,
+// so an autostart entry written with it would point nowhere after a reboot.
+function resolveLinuxExecutablePath(options = {}) {
+  const environment = options.env || process.env;
+  const fallback = options.execPath || process.execPath;
+  return environment.APPIMAGE || fallback;
 }
 
 // Desktop Entry Spec quoting: values run through the launcher's own tokenizer,
@@ -41,9 +53,9 @@ function buildDesktopEntry(execPath, args = []) {
   return `${lines.join('\n')}\n`;
 }
 
-async function isLinuxAutostartEnabled(homeDirectory) {
+async function isLinuxAutostartEnabled(homeDirectory, options = {}) {
   try {
-    await fs.access(desktopFilePath(homeDirectory));
+    await fs.access(desktopFilePath(homeDirectory, options));
     return true;
   } catch {
     return false;
@@ -51,7 +63,7 @@ async function isLinuxAutostartEnabled(homeDirectory) {
 }
 
 async function setLinuxAutostart(homeDirectory, enabled, options = {}) {
-  const filePath = desktopFilePath(homeDirectory);
+  const filePath = desktopFilePath(homeDirectory, options);
   if (!enabled) {
     await fs.rm(filePath, { force: true });
     return;
@@ -66,5 +78,6 @@ module.exports = {
   buildDesktopEntry,
   buildExecLine,
   isLinuxAutostartEnabled,
+  resolveLinuxExecutablePath,
   setLinuxAutostart,
 };

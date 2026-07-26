@@ -24,7 +24,7 @@ const { RelayEngine } = require('./core/relay-engine');
 const { routeSignature, validateConfig } = require('./core/model');
 const { shouldValidateCredentialUpdate, validateCredentialUpdate } = require('./core/credential-policy');
 const { discoverPrivateKeys } = require('./core/ssh-key-discovery');
-const { setLinuxAutostart } = require('./core/linux-autostart');
+const { resolveLinuxExecutablePath, setLinuxAutostart } = require('./core/linux-autostart');
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
@@ -198,17 +198,18 @@ function applyWindowTheme(theme) {
 }
 
 function applyLoginSetting(settings) {
-  const executablePath = process.env.PORTABLE_EXECUTABLE_FILE || process.execPath;
   const args = settings.launchHidden ? ['--hidden'] : [];
   if (process.platform === 'linux') {
-    setLinuxAutostart(app.getPath('home'), Boolean(settings.startWithSystem), { execPath: executablePath, args })
-      .catch((error) => log('error', 'Could not update the Linux autostart entry.', { error: error.message }));
+    setLinuxAutostart(app.getPath('home'), Boolean(settings.startWithSystem), {
+      execPath: resolveLinuxExecutablePath(),
+      args,
+    }).catch((error) => log('error', 'Could not update the Linux autostart entry.', { error: error.message }));
     return;
   }
   if (!['win32', 'darwin'].includes(process.platform)) return;
   app.setLoginItemSettings({
     openAtLogin: Boolean(settings.startWithSystem),
-    path: executablePath,
+    path: process.env.PORTABLE_EXECUTABLE_FILE || process.execPath,
     args,
   });
 }
