@@ -35,3 +35,7 @@ jobs:
 
       - name: Run tests
         run: pnpm test
+
+      - name: Run Electron runtime smoke test
+        if: matrix.os == 'windows-latest'
+        run: pnpm test:electron-runtime
