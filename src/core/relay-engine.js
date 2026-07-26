@@ -3,6 +3,7 @@
 const net = require('node:net');
 const { LOCAL_NODE_ID, routeSignature } = require('./model');
 const { handleSocks5 } = require('./socks5');
+const MAX_CONNECTIONS_PER_ROUTE = 256;
 
 function initialStatus(routeId) {
   return {
@@ -179,6 +180,15 @@ class RelayEngine {
     try {
       const onConnection = (socket, info) => {
         if (!runtime.desired || token !== runtime.token || this.shuttingDown) {
+          socket.destroy();
+          return;
+        }
+        if (runtime.pairs.size >= MAX_CONNECTIONS_PER_ROUTE) {
+          this.logger('warn', `${route.name} rejected a connection because the route reached its connection limit`, {
+            routeId: route.id,
+            sourceAddress: info?.sourceAddress,
+            limit: MAX_CONNECTIONS_PER_ROUTE,
+          });
           socket.destroy();
           return;
         }
@@ -421,6 +431,7 @@ class RelayEngine {
 }
 
 module.exports = {
+  MAX_CONNECTIONS_PER_ROUTE,
   RelayEngine,
   dialLocal,
   initialStatus,

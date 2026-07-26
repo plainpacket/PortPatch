@@ -15,10 +15,16 @@ test('a new configuration has a local node and safe defaults', () => {
   const config = createDefaultConfig();
   assert.equal(config.localNode.id, 'local');
   assert.equal(config.settings.closeToTray, true);
+  assert.equal(config.settings.resumeActiveRoutes, false);
   assert.equal(config.settings.uiScale, 100);
   assert.equal(config.settings.uiScaleVersion, 2);
   assert.equal(config.settings.theme, 'dark');
   assert.deepEqual(config.servers, []);
+});
+
+test('route resume is explicit opt-in and survives normalization', () => {
+  assert.equal(normalizeConfig({ settings: {} }).settings.resumeActiveRoutes, false);
+  assert.equal(normalizeConfig({ settings: { resumeActiveRoutes: true } }).settings.resumeActiveRoutes, true);
 });
 
 test('interface theme accepts dark and light only', () => {

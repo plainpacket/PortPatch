@@ -25,6 +25,7 @@ const { routeSignature, validateConfig } = require('./core/model');
 const { shouldValidateCredentialUpdate, validateCredentialUpdate } = require('./core/credential-policy');
 const { discoverPrivateKeys } = require('./core/ssh-key-discovery');
 const { resolveLinuxExecutablePath, setLinuxAutostart } = require('./core/linux-autostart');
+const { RouteIntentStore, selectResumableRouteIds } = require('./core/route-intent-store');
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
@@ -33,6 +34,7 @@ let mainWindow = null;
 let tray = null;
 let configStore = null;
 let secretStore = null;
+let routeIntentStore = null;
 let connections = null;
 let relayEngine = null;
 let quitting = false;
@@ -113,14 +115,25 @@ function updateTray() {
         try {
           await configSaveChain.catch(() => {});
           ensureStoredConfigIsValid();
-          await relayEngine.startAll();
+          await startAllRoutesWithIntent();
         } catch (error) {
           log('error', 'Failed to start all routes', { error: error.message });
           dialog.showErrorBox('Could not start routes', error.message);
         }
       },
     },
-    { label: 'Stop all routes', enabled: active > 0, click: () => relayEngine.stopAll() },
+    {
+      label: 'Stop all routes',
+      enabled: active > 0,
+      click: async () => {
+        try {
+          await stopAllRoutesWithIntent();
+        } catch (error) {
+          log('error', 'Failed to stop all routes cleanly', { error: error.message });
+          dialog.showErrorBox('Could not update route resume state', error.message);
+        }
+      },
+    },
     { type: 'separator' },
     { label: 'Quit PortPatch', click: () => app.quit() },
   ]));
@@ -224,6 +237,119 @@ function invalidConfigError(errors) {
 function ensureStoredConfigIsValid() {
   const { errors } = validateConfig(configStore.get());
   if (errors.length) throw invalidConfigError(errors);
+}
+
+function desiredRouteIds(config = configStore.get(), options = {}) {
+  return selectResumableRouteIds(config.routes, relayEngine.statuses(), routeIntentStore.get(), options);
+}
+
+async function syncRouteIntent(config = configStore.get(), options = {}) {
+  if (!config.settings.resumeActiveRoutes) {
+    await routeIntentStore.clearFailClosed();
+    return;
+  }
+  await routeIntentStore.update(() => desiredRouteIds(config, options));
+}
+
+async function startRouteWithIntent(routeId) {
+  const config = configStore.get();
+  const saveIntent = config.settings.resumeActiveRoutes
+    && config.routes.some((route) => route.id === routeId);
+  if (saveIntent) {
+    try {
+      await routeIntentStore.add(routeId);
+    } catch (error) {
+      throw Object.assign(new Error(`The route was not started because its resume state could not be saved: ${error.message}`), {
+        code: 'ROUTE_INTENT_SAVE_FAILED',
+      });
+    }
+  }
+  try {
+    return await relayEngine.start(routeId);
+  } catch (error) {
+    if (saveIntent && !relayEngine.status(routeId).desired) {
+      await routeIntentStore.remove(routeId).catch((cleanupError) => {
+        log('warn', 'A failed route start left stale route-resume state.', {
+          routeId,
+          error: cleanupError.message,
+        });
+      });
+    }
+    throw error;
+  }
+}
+
+async function stopRouteWithIntent(routeId) {
+  let persistenceError = null;
+  if (configStore.get().settings.resumeActiveRoutes) {
+    try {
+      await routeIntentStore.remove(routeId);
+    } catch (error) {
+      try {
+        await routeIntentStore.clearFailClosed();
+        log('warn', 'All saved route-resume state was cleared after one route could not be removed.', {
+          routeId,
+          error: error.message,
+        });
+      } catch (clearError) {
+        persistenceError = clearError;
+      }
+    }
+  }
+  const status = await relayEngine.stop(routeId);
+  if (persistenceError) {
+    throw Object.assign(new Error(`The route stopped, but its saved resume state could not be removed: ${persistenceError.message}`), {
+      code: 'ROUTE_INTENT_SAVE_FAILED',
+    });
+  }
+  return status;
+}
+
+async function startAllRoutesWithIntent() {
+  await Promise.allSettled(configStore.get().routes.map((route) => startRouteWithIntent(route.id)));
+  return relayEngine.statuses();
+}
+
+async function stopAllRoutesWithIntent() {
+  let persistenceError = null;
+  if (configStore.get().settings.resumeActiveRoutes) {
+    try {
+      await routeIntentStore.clearFailClosed();
+    } catch (error) {
+      persistenceError = error;
+    }
+  }
+  const statuses = await relayEngine.stopAll();
+  if (persistenceError) {
+    throw Object.assign(new Error(`Routes stopped, but their saved resume state could not be removed: ${persistenceError.message}`), {
+      code: 'ROUTE_INTENT_SAVE_FAILED',
+    });
+  }
+  return statuses;
+}
+
+async function resumeSavedRoutes() {
+  const config = configStore.get();
+  if (!config.settings.resumeActiveRoutes) return;
+  const { errors } = validateConfig(config);
+  if (errors.length) {
+    log('error', 'Saved routes were not resumed because the configuration is invalid.', { errors });
+    return;
+  }
+  const validIds = new Set(config.routes.map((route) => route.id));
+  const routeIds = routeIntentStore.get().filter((routeId) => validIds.has(routeId));
+  if (routeIds.length !== routeIntentStore.get().length) {
+    await routeIntentStore.replace(routeIds).catch((error) => {
+      log('warn', 'Stale route-resume entries could not be removed.', { error: error.message });
+    });
+  }
+  const results = await Promise.allSettled(routeIds.map((routeId) => relayEngine.start(routeId)));
+  const failures = results.filter((result) => result.status === 'rejected');
+  if (failures.length) {
+    log('warn', 'Some saved routes could not be resumed and will follow their reconnection policy.', {
+      failedRoutes: failures.length,
+    });
+  }
 }
 
 function secretBindings(config) {
@@ -334,6 +460,29 @@ async function saveConfigTransaction(payload = {}) {
     if (affectedRouteIds.has(routeId) && nextRoutes.has(routeId)) await relayEngine.start(routeId).catch(() => {});
   }
   applyLoginSetting(next.settings);
+  const enablingRouteResume = !previous.settings.resumeActiveRoutes && next.settings.resumeActiveRoutes;
+  try {
+    await syncRouteIntent(next, { includeAllDesired: enablingRouteResume });
+  } catch (error) {
+    log('error', 'Could not update the saved route-resume state.', { error: error.message });
+    if (next.settings.resumeActiveRoutes) {
+      const safeConfig = structuredClone(next);
+      safeConfig.settings.resumeActiveRoutes = false;
+      try {
+        next = await configStore.save(safeConfig);
+      } catch (rollbackError) {
+        throw Object.assign(new Error(`Route restoration could not be saved, and disabling it also failed: ${rollbackError.message}`), {
+          code: 'ROUTE_INTENT_ROLLBACK_FAILED',
+          cause: error,
+        });
+      }
+      updateTray();
+      throw Object.assign(new Error('Route restoration could not be enabled and remains off. Other settings were saved.'), {
+        code: 'ROUTE_INTENT_SAVE_FAILED',
+        cause: error,
+      });
+    }
+  }
   updateTray();
   return {
     config: next,
@@ -399,15 +548,15 @@ function registerIpc() {
   handle('route:start', async ({ routeId }) => {
     await configSaveChain.catch(() => {});
     ensureStoredConfigIsValid();
-    return relayEngine.start(routeId);
+    return startRouteWithIntent(routeId);
   });
-  handle('route:stop', async ({ routeId }) => relayEngine.stop(routeId));
+  handle('route:stop', async ({ routeId }) => stopRouteWithIntent(routeId));
   handle('route:start-all', async () => {
     await configSaveChain.catch(() => {});
     ensureStoredConfigIsValid();
-    return relayEngine.startAll();
+    return startAllRoutesWithIntent();
   });
-  handle('route:stop-all', async () => relayEngine.stopAll());
+  handle('route:stop-all', async () => stopAllRoutesWithIntent());
   handle('window:set-theme', async ({ theme } = {}) => {
     applyWindowTheme(theme === 'light' ? 'light' : 'dark');
   });
@@ -420,6 +569,8 @@ async function initialize() {
   await configStore.load();
   secretStore = new SecretStore(app.getPath('userData'), safeStorage, log);
   await secretStore.load();
+  routeIntentStore = new RouteIntentStore(app.getPath('userData'), log);
+  await routeIntentStore.load();
   connections = new ConnectionManager(
     () => configStore.get(),
     (serverId) => {
@@ -442,6 +593,7 @@ async function initialize() {
   createTray();
   createWindow();
   registerIpc();
+  await resumeSavedRoutes();
 }
 
 if (gotLock) {

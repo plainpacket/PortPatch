@@ -45,7 +45,7 @@ function registerMockIpc() {
       { id: '2', timestamp: new Date().toISOString(), level: 'warn', message: 'Research server SSH disconnected', details: { serverId: 'lab' } },
     ],
     platform: 'win32',
-    version: '0.4.1-test',
+    version: '0.4.2-test',
   }));
   ipcMain.handle('config:save', async (_event, payload) => {
     configSaveCount += 1;
@@ -459,7 +459,7 @@ async function run() {
     startupControls: document.querySelectorAll('#start-with-system').length,
     startupLabel: document.querySelector('label[for="start-with-system"]')?.textContent,
     routeStartupControls: document.querySelectorAll('#edge-route-autostart').length,
-    routeBehaviorNote: document.querySelector('#modal')?.textContent.includes('Port routes remain stopped until you select Start route or Start all.'),
+    routeBehaviorNote: document.querySelector('#modal')?.textContent.includes('only routes you explicitly started are restored'),
     hiddenLaunchDisabled: document.querySelector('#launch-hidden')?.disabled,
     interfaceSize: document.querySelector('#ui-scale')?.value,
     theme: document.querySelector('#ui-theme')?.value

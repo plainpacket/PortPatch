@@ -27,16 +27,27 @@ class SecretStore {
     const syncAvailable = typeof this.safeStorage.isEncryptionAvailable === 'function'
       ? this.safeStorage.isEncryptionAvailable()
       : false;
-    const backend = process.platform === 'linux' && typeof this.safeStorage.getSelectedStorageBackend === 'function'
-      ? this.safeStorage.getSelectedStorageBackend()
-      : process.platform === 'win32' ? 'dpapi' : process.platform === 'darwin' ? 'keychain' : 'unknown';
+    const backend = this.selectedBackend();
+    const available = Boolean(asyncAvailable || syncAvailable);
     return {
-      available: Boolean(asyncAvailable || syncAvailable),
+      available,
       backend,
+      canPersistSecrets: available && backend !== 'basic_text',
       warning: backend === 'basic_text'
-        ? 'No Linux secure-storage backend was found, so passwords and key passphrases are not strongly protected. Install and run gnome-keyring (or KWallet on KDE) to enable encryption: on Debian/Ubuntu, run "sudo apt install gnome-keyring"; on Fedora, run "sudo dnf install gnome-keyring". Then sign out and back in.'
+        ? 'No Linux secure-storage backend was found, so PortPatch will not save new passwords or key passphrases. Install and run gnome-keyring (or KWallet on KDE) to enable encryption: on Debian/Ubuntu, run "sudo apt install gnome-keyring"; on Fedora, run "sudo dnf install gnome-keyring". Then sign out and back in.'
         : null,
     };
+  }
+
+  selectedBackend() {
+    if (typeof this.safeStorage.getSelectedStorageBackend === 'function') {
+      try {
+        return this.safeStorage.getSelectedStorageBackend();
+      } catch (error) {
+        this.logger('warn', 'The secure-storage backend could not be identified.', { error: error.message });
+      }
+    }
+    return process.platform === 'win32' ? 'dpapi' : process.platform === 'darwin' ? 'keychain' : 'unknown';
   }
 
   metadata(serverEntries = []) {
@@ -122,6 +133,11 @@ class SecretStore {
   }
 
   async encrypt(value) {
+    if (this.selectedBackend() === 'basic_text') {
+      throw Object.assign(new Error('PortPatch will not save credentials without a secure Linux keyring backend.'), {
+        code: 'INSECURE_SECRET_STORAGE',
+      });
+    }
     if (typeof this.safeStorage.encryptStringAsync === 'function' && await this.asyncEncryptionAvailable()) {
       const result = await this.safeStorage.encryptStringAsync(value);
       const buffer = Buffer.isBuffer(result) ? result : result?.encrypted;

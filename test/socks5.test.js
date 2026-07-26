@@ -3,7 +3,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { PassThrough } = require('node:stream');
-const { handleSocks5, negotiateSocks5, socksErrorCode } = require('../src/core/socks5');
+const {
+  handleSocks5,
+  MAX_NEGOTIATION_BUFFER,
+  negotiateSocks5,
+  socksErrorCode,
+} = require('../src/core/socks5');
 
 class MockSocket extends PassThrough {
   constructor() {
@@ -84,4 +89,11 @@ test('network errors are mapped to SOCKS5 reply codes', () => {
   assert.equal(socksErrorCode({ code: 'ECONNREFUSED' }), 0x05);
   assert.equal(socksErrorCode({ code: 'ENOTFOUND' }), 0x04);
   assert.equal(socksErrorCode(new Error('unknown')), 0x01);
+});
+
+test('an oversized SOCKS handshake is rejected before it can exhaust memory', async () => {
+  const socket = new MockSocket();
+  const pending = negotiateSocks5(socket);
+  socket.feed(Buffer.alloc(MAX_NEGOTIATION_BUFFER + 1, 0x05));
+  await assert.rejects(pending, { code: 'SOCKS_HANDSHAKE_TOO_LARGE' });
 });

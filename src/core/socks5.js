@@ -1,15 +1,24 @@
 'use strict';
 
 const { isIP } = require('node:net');
+const MAX_NEGOTIATION_BUFFER = 64 * 1024;
 
 class SocketReader {
-  constructor(socket) {
+  constructor(socket, maxBufferedBytes = MAX_NEGOTIATION_BUFFER) {
     this.socket = socket;
+    this.maxBufferedBytes = maxBufferedBytes;
     this.buffers = [];
     this.length = 0;
     this.pending = [];
     this.closedError = null;
     this.onData = (chunk) => {
+      if (this.length + chunk.length > this.maxBufferedBytes) {
+        this.fail(Object.assign(new Error('The SOCKS handshake exceeded the allowed buffer size.'), {
+          code: 'SOCKS_HANDSHAKE_TOO_LARGE',
+        }));
+        socket.destroy();
+        return;
+      }
       this.buffers.push(chunk);
       this.length += chunk.length;
       this.flush();
@@ -154,6 +163,7 @@ async function handleSocks5(socket, dial) {
 }
 
 module.exports = {
+  MAX_NEGOTIATION_BUFFER,
   SocketReader,
   failureReply,
   handleSocks5,

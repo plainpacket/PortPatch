@@ -3,3 +3,6 @@ allowBuilds:
   electron: true
   electron-winstaller: false
   ssh2: false
+
+overrides:
+  brace-expansion: 5.0.8

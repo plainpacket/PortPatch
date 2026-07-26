@@ -776,10 +776,20 @@ function credentialStorageNote() {
   if (['gnome_libsecret', 'kwallet', 'kwallet5', 'kwallet6'].includes(state.encryption?.backend)) {
     return 'Encrypted with your Linux secret service (GNOME Keyring or KWallet) and stored in PortPatch per-user app data as secrets.json.';
   }
+  if (state.encryption?.backend === 'basic_text') {
+    return 'Saving is blocked until GNOME Keyring or KWallet is available. SSH Agent mode does not require PortPatch to store a secret.';
+  }
   return 'Stored in PortPatch per-user app data as secrets.json using the secure storage available on this system.';
 }
 
 function serverFormTemplate(server, existing, metadata) {
+  const legacyInsecureStorage = state.encryption?.backend === 'basic_text';
+  const passwordState = metadata.hasPassword
+    ? legacyInsecureStorage ? 'Saved without keyring protection' : 'Saved securely'
+    : 'Not saved';
+  const passphraseState = metadata.hasPassphrase
+    ? legacyInsecureStorage ? 'saved without keyring protection' : 'saved'
+    : 'optional';
   return `
     <div class="modal-header">
       <div><h2 id="modal-title">${existing ? 'Server settings' : 'Add SSH server'}</h2><p>Only servers with a verified host key can be used in port routes.</p></div>
@@ -800,14 +810,14 @@ function serverFormTemplate(server, existing, metadata) {
               <div class="input-with-button"><input id="server-key-path" value="${escapeHtml(server.keyPath)}" placeholder="~/.ssh/id_ed25519"><button id="browse-key" class="button button-ghost" type="button">Browse</button></div>
               <span id="key-detection-status" class="form-help">Looking for a private key in ~/.ssh...</span>
             </div>
-            <div id="passphrase-field" class="form-field full"><label for="server-passphrase">Key passphrase ${metadata.hasPassphrase ? '- saved' : '- optional'}</label><input id="server-passphrase" type="password" autocomplete="new-password" placeholder="${metadata.hasPassphrase ? 'Enter a new value to change it' : 'Required only for encrypted keys'}"></div>
+            <div id="passphrase-field" class="form-field full"><label for="server-passphrase">Key passphrase - ${passphraseState}</label><input id="server-passphrase" type="password" autocomplete="new-password" placeholder="${metadata.hasPassphrase ? 'Enter a new value to change it' : 'Required only for encrypted keys'}"></div>
             <div id="clear-passphrase-field" class="checkbox-field full ${metadata.hasPassphrase ? '' : 'is-hidden'}"><input id="clear-passphrase" type="checkbox"><label for="clear-passphrase">Remove the saved passphrase; the new private key has no passphrase</label></div>
           </div>
         </details>
         <div id="password-field" class="form-field full">
           <div class="credential-label-row">
             <label for="server-password">SSH password</label>
-            <span class="credential-state ${metadata.hasPassword ? 'saved' : ''}">${metadata.hasPassword ? 'Saved securely' : 'Not saved'}</span>
+            <span class="credential-state ${metadata.hasPassword && !legacyInsecureStorage ? 'saved' : ''}">${passwordState}</span>
           </div>
           <input id="server-password" type="password" autocomplete="new-password" placeholder="${metadata.hasPassword ? 'Leave blank to keep the saved password' : 'Enter password'}">
           <span class="credential-storage-note">${metadata.hasPassword ? 'A password is already saved. Leave this field blank to keep it. ' : ''}${escapeHtml(credentialStorageNote())}</span>
@@ -998,6 +1008,16 @@ function openServerModal(serverId = null) {
     ) {
       return toast('The server or private key changed. Enter the passphrase again or choose to remove the saved passphrase.', 'error');
     }
+    const savesNewSecret = (
+      (draft.authMode === 'password' && Boolean(credentialDraft.password))
+      || (draft.authMode === 'key' && Boolean(credentialDraft.passphrase))
+    );
+    if (savesNewSecret && state.encryption?.canPersistSecrets === false) {
+      const message = state.encryption?.backend === 'basic_text'
+        ? 'PortPatch cannot save this credential until GNOME Keyring or KWallet is available. Install a keyring or use SSH Agent authentication.'
+        : 'PortPatch cannot save this credential because secure operating-system storage is unavailable. Restore secure storage or use SSH Agent authentication.';
+      return toast(message, 'error');
+    }
     if (!draft.hostFingerprint && !window.confirm('The host key has not been verified. You can save this server, but routes cannot start yet. Continue?')) return;
     if (existing) {
       const indexToReplace = state.config.servers.findIndex((item) => item.id === existing.id);
@@ -1017,10 +1037,10 @@ function openServerModal(serverId = null) {
         clearPassphrase: credentialDraft.clearPassphrase,
       };
     }
-    renderAll();
-    closeModal();
     try {
       await persistConfig(secretUpdates);
+      renderAll();
+      closeModal();
       toast(existing ? 'Server settings saved.' : 'Server added.', 'success');
     } catch (error) {
       toast(error.message, 'error');
@@ -1039,10 +1059,10 @@ async function deleteServer(serverId) {
   state.config.routes = state.config.routes.filter((route) => route.source.nodeId !== serverId && route.target.nodeId !== serverId);
   state.selectedNodeId = null;
   if (related.some((route) => route.id === state.selectedRouteId)) state.selectedRouteId = null;
-  closeModal();
-  renderAll();
   try {
     await persistConfig();
+    closeModal();
+    renderAll();
     toast('The server and its connected routes were deleted.', 'success');
   } catch (error) {
     toast(error.message, 'error');
@@ -1274,7 +1294,8 @@ function settingsTemplate() {
         <div class="section-label">STARTUP</div>
         <div class="checkbox-field full"><input id="start-with-system" type="checkbox" ${settings.startWithSystem ? 'checked' : ''}><label for="start-with-system">Launch PortPatch when I sign in</label></div>
         <div class="checkbox-field full"><input id="launch-hidden" type="checkbox" ${settings.launchHidden ? 'checked' : ''} ${settings.startWithSystem ? '' : 'disabled'}><label for="launch-hidden">Open in the tray when launched at sign-in</label></div>
-        <span class="form-help full">Port routes remain stopped until you select Start route or Start all.</span>
+        <div class="checkbox-field full"><input id="resume-active-routes" type="checkbox" ${settings.resumeActiveRoutes ? 'checked' : ''}><label for="resume-active-routes">Resume routes that were active when PortPatch last exited</label></div>
+        <span class="form-help full">Off by default. When enabled, only routes you explicitly started are restored. Stopped routes stay stopped, including after a reboot. Previously approved external listeners may become reachable again automatically.</span>
         ${state.encryption?.warning ? `<div class="notice">${escapeHtml(state.encryption.warning)}</div>` : ''}
       </form>
     </div>
@@ -1307,6 +1328,7 @@ function openSettingsModal() {
       closeToTray: $('#close-to-tray').checked,
       startWithSystem: $('#start-with-system').checked,
       launchHidden: $('#launch-hidden').checked,
+      resumeActiveRoutes: $('#resume-active-routes').checked,
       uiScale: Number($('#ui-scale').value),
       uiScaleVersion: 2,
       theme: $('#ui-theme').value,

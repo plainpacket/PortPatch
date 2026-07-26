@@ -42,6 +42,27 @@ test('secrets round-trip when Electron exposes only synchronous safeStorage', as
   assert.deepEqual(await store.get('server', {}, TEST_BINDING), { password: 'secret' });
 });
 
+test('new secrets are rejected when Linux secure storage falls back to basic_text', async (context) => {
+  const safeStorage = {
+    getSelectedStorageBackend: () => 'basic_text',
+    isEncryptionAvailable: () => true,
+    encryptString: (value) => Buffer.from(value),
+    decryptString: (buffer) => buffer.toString(),
+  };
+  const store = await withTemporaryStore(context, safeStorage);
+  const status = await store.encryptionStatus();
+  assert.equal(status.available, true);
+  assert.equal(status.canPersistSecrets, false);
+  assert.match(status.warning, /will not save new passwords/i);
+  await assert.rejects(
+    store.update('server', { password: 'must-not-be-written' }, TEST_BINDING),
+    { code: 'INSECURE_SECRET_STORAGE' },
+  );
+  assert.deepEqual(store.metadata([{ id: 'server', binding: TEST_BINDING }]), {
+    server: { hasPassword: false, hasPassphrase: false },
+  });
+});
+
 test('an encryption failure does not change the existing in-memory secrets', async (context) => {
   const safeStorage = {
     isAsyncEncryptionAvailable: async () => true,

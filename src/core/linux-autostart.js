@@ -51,7 +51,7 @@ function buildDesktopEntry(execPath, args = []) {
     '[Desktop Entry]',
     'Type=Application',
     'Name=PortPatch',
-    'Comment=Start PortPatch and resume active port routes',
+    'Comment=Start PortPatch at sign-in',
     `Exec=${buildExecLine(execPath, args)}`,
     'Terminal=false',
     'X-GNOME-Autostart-enabled=true',

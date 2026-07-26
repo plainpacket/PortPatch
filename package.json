@@ -1,15 +1,21 @@
 {
   "name": "portpatch",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Visual any-to-any SSH port routing for Windows and Linux",
   "main": "src/main.js",
   "desktopName": "io.github.plainpacket.portpatch.desktop",
   "author": "PortPatch contributors",
   "license": "MIT",
   "private": true,
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
     "start": "electron .",
-    "test": "node --test --test-isolation=none test/english-only.test.js test/model.test.js test/socks5.test.js test/config-store.test.js test/secret-store.test.js test/credential-policy.test.js test/ssh-key-discovery.test.js test/linux-autostart.test.js test/connection-manager.test.js test/relay-engine.test.js test/ssh-relay-integration.test.js",
+    "test": "node --test --test-isolation=none test/english-only.test.js test/model.test.js test/socks5.test.js test/config-store.test.js test/secret-store.test.js test/credential-policy.test.js test/ssh-key-discovery.test.js test/linux-autostart.test.js test/route-intent-store.test.js test/connection-manager.test.js test/relay-engine.test.js test/ssh-relay-integration.test.js",
+    "demo": "electron scripts/capture-demo.js",
+    "demo:tray": "electron scripts/capture-tray-demo.js",
     "icons": "electron scripts/rasterize-icons.js",
     "test:electron-runtime": "electron test/electron-runtime-smoke.js",
     "pack": "electron-builder --dir",
@@ -22,7 +28,8 @@
   },
   "devDependencies": {
     "electron": "43.2.0",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.0.12",
+    "gifenc": "^1.0.3"
   },
   "build": {
     "appId": "io.github.plainpacket.portpatch",

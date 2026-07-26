@@ -2,6 +2,8 @@ node_modules/
 .pnpm-store/
 release/
 coverage/
+visual-test-output/
+electron-runtime-smoke.json
 *.log
 .DS_Store
 Thumbs.db
