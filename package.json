@@ -11,6 +11,7 @@
     "start": "electron .",
     "test": "node --test --test-isolation=none test/english-only.test.js test/model.test.js test/socks5.test.js test/config-store.test.js test/secret-store.test.js test/credential-policy.test.js test/ssh-key-discovery.test.js test/linux-autostart.test.js test/connection-manager.test.js test/relay-engine.test.js test/ssh-relay-integration.test.js",
     "icons": "electron scripts/rasterize-icons.js",
+    "test:electron-runtime": "electron test/electron-runtime-smoke.js",
     "pack": "electron-builder --dir",
     "dist": "pnpm dist:win",
     "dist:win": "electron-builder --win portable --publish never",
