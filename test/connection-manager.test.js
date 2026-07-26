@@ -185,6 +185,22 @@ test('Windows agent selection prefers SSH_AUTH_SOCK, then OpenSSH pipe, then Pag
   assert.equal(probes, 2);
 });
 
+test('Linux agent selection uses SSH_AUTH_SOCK and never probes a Windows pipe', async () => {
+  let probes = 0;
+  assert.equal(await resolveSshAgent({
+    env: { SSH_AUTH_SOCK: '/run/user/1000/keyring/ssh' },
+    platform: 'linux',
+    probeAgentPipe: async () => { probes += 1; return true; },
+  }), '/run/user/1000/keyring/ssh');
+
+  assert.equal(await resolveSshAgent({
+    env: {},
+    platform: 'linux',
+    probeAgentPipe: async () => { probes += 1; return true; },
+  }), '');
+  assert.equal(probes, 0);
+});
+
 test('connection test settles when a server closes cleanly before authentication finishes', async (context) => {
   const ssh2Root = path.dirname(require.resolve('ssh2/package.json'));
   const hostKey = fs.readFileSync(path.join(ssh2Root, 'test', 'fixtures', 'ssh_host_rsa_key'));
