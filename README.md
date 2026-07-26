@@ -2,7 +2,7 @@
 
 PortPatch is a portable desktop application that represents your computer and SSH servers as nodes. Draw a directed edge from the place that accepts a connection to the place that should receive the traffic. Closing the window keeps active routes running in the system tray.
 
-Current version: `0.3.0` - Windows MVP - MIT License
+Current version: `0.3.0` - MIT License
 
 ![PortPatch demo](./docs/portpatch-demo.gif)
 
@@ -36,7 +36,7 @@ PortPatch is distributed without an installer.
 - No administrator access is required for normal use
 - Application settings and encrypted credentials remain in the operating system's per-user application-data directory. They are not written beside the executable. This keeps the executable movable and allows it to run from read-only locations.
 
-The Windows executable is the only published distribution so far. The Linux AppImage builds successfully and has been functionally exercised (build, launch, tray behavior, quit path) only on Ubuntu 24.04 with GNOME on X11, as part of development rather than by a person on real end-user hardware; other distributions, KDE, and Wayland sessions have not been tried at all. GitHub Actions now builds and publishes the AppImage alongside the Windows executable on every tagged release, but no Linux release has been cut yet pending that broader verification. See [architecture.md](docs/architecture.md) for the specific findings from Linux testing so far, including a deliberate sandboxing trade-off in the AppImage build.
+The Windows executable is the only published distribution so far. GitHub Actions builds a Linux AppImage on every tagged release, but no Linux release has been cut yet; see [Current limitations](#current-limitations) for exactly what has and has not been verified there, and [architecture.md](docs/architecture.md) for the underlying findings, including a deliberate sandboxing trade-off in the AppImage build.
 
 ### Download for Windows
 
@@ -65,12 +65,12 @@ For a browser, configure `127.0.0.1:1080` as its SOCKS5 proxy and enable proxy-b
 
 ## Quick start
 
-1. Download the portable executable for your platform from [GitHub Releases](https://github.com/plainpacket/PortPatch/releases) and run it (on Linux, mark the AppImage executable first).
+1. Download the portable Windows executable from [GitHub Releases](https://github.com/plainpacket/PortPatch/releases) and run it. On Linux, build the AppImage from source for now (see Development) and mark it executable before running it; it is not yet published as a release.
 2. Select `Add server`, then enter the SSH address, user, and authentication method. For private-key authentication, PortPatch silently selects a recognized key from `~/.ssh`; open `Private key options` only when you need another file or a passphrase. SSH Agent mode uses keys already unlocked in Windows OpenSSH Agent/Pageant, or in an `ssh-agent` reachable through `SSH_AUTH_SOCK` on Linux.
 3. Select `Test connection`, verify the SHA-256 host-key fingerprint, and trust it only if it is correct. PortPatch does not send a password or private key before this confirmation.
 4. Hold `Ctrl` and drag the node that should accept connections onto the node that should receive the traffic. Drag without `Ctrl` to rearrange nodes, drag the background to pan, and use the mouse wheel to zoom.
 5. Enter the two ports in the compact editor on the new edge. Open `Advanced` only when you need to change addresses, route type, startup, or reconnection behavior.
-6. Close the window to keep routes running in the system tray. Use the tray menu, or the power-icon Quit button in the top bar, to quit completely; use the Quit button specifically if your Linux desktop does not display the tray icon (see Current limitations).
+6. Close the window to keep routes running in the system tray. Use the tray menu, or the power-icon Quit button in the top bar, to quit completely; use the Quit button specifically if your Linux desktop does not display the tray icon (see [Current limitations](#current-limitations)).
 
 Select the `?` button at any time to review the map controls.
 
@@ -82,7 +82,7 @@ The default local bind address, `127.0.0.1`, accepts connections only from the s
 
 Node.js and pnpm are required.
 
-```powershell
+```bash
 pnpm install
 pnpm icons
 pnpm test
@@ -122,6 +122,6 @@ When the source is remote, PortPatch uses SSH `forwardIn`. When the target is re
 - PortPatch relays both SSH streams for remote-to-remote routes, so the application must remain running.
 - SOCKS5 is a per-application proxy, not a VPN or transparent TUN interface for all server traffic.
 - Windows executables are not yet signed with a commercial Authenticode certificate and may trigger a reputation warning.
-- The Linux AppImage builds and runs, but so far has only been exercised on Ubuntu 24.04/GNOME/X11 during development, not by a person on real hardware, and not on any other distribution, KDE, or a Wayland session; see [architecture.md](docs/architecture.md) for confirmed findings on sandboxing and tray behavior.
-- On GNOME, the system tray icon requires the "AppIndicator and KStatusNotifierItem Support" extension. It ships pre-installed on Ubuntu but is not enabled by default in every session, and is not installed at all on stock Fedora Workstation; without it, the tray icon is silently never shown. With the extension active, the icon has been confirmed to render correctly (see [architecture.md](docs/architecture.md)). Use the topbar Quit button (or the tray menu, if visible) to fully close PortPatch either way.
+- The Linux AppImage builds and runs, and has been confirmed working by a person on real Ubuntu 24.04/GNOME/X11 hardware, but not yet on any other distribution, KDE, or a Wayland session; see [architecture.md](docs/architecture.md) for the underlying findings on sandboxing and tray behavior.
+- On GNOME, the system tray icon requires the "AppIndicator and KStatusNotifierItem Support" extension. It ships pre-installed on Ubuntu but is not enabled by default in every session, and is not installed at all on stock Fedora Workstation; without it, the tray icon is silently never shown. With the extension active, the icon has been confirmed to render correctly (see [architecture.md](docs/architecture.md)). Use the top bar Quit button (or the tray menu, if visible) to fully close PortPatch either way.
 - If no Linux secret-storage backend (GNOME Keyring/libsecret or KWallet) is available, PortPatch still allows saving passwords and key passphrases but warns that they are not strongly protected. Install `gnome-keyring` (or KWallet on KDE) for encrypted storage.
