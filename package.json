@@ -13,8 +13,8 @@
     "icons": "electron scripts/rasterize-icons.js",
     "pack": "electron-builder --dir",
     "dist": "pnpm dist:win",
-    "dist:win": "electron-builder --win portable",
-    "dist:linux": "electron-builder --linux AppImage"
+    "dist:win": "electron-builder --win portable --publish never",
+    "dist:linux": "electron-builder --linux AppImage --publish never"
   },
   "dependencies": {
     "ssh2": "^1.17.0"

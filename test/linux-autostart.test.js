@@ -31,8 +31,10 @@ test('enabling autostart writes a spec-compliant desktop entry at the XDG path',
   assert.match(contents, /^Exec=\/opt\/PortPatch\/portpatch --hidden$/m);
   assert.match(contents, /^X-GNOME-Autostart-enabled=true$/m);
 
-  const stat = await fs.stat(desktopFilePath(homeDirectory));
-  assert.equal(stat.mode & 0o777, 0o644);
+  if (process.platform !== 'win32') {
+    const stat = await fs.stat(desktopFilePath(homeDirectory));
+    assert.equal(stat.mode & 0o777, 0o644);
+  }
 });
 
 test('disabling autostart removes the desktop entry and is idempotent', async (context) => {
